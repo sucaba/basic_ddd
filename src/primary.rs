@@ -52,6 +52,15 @@ pub struct Primary<T: HasId + Debug> {
     changes: Vec<DbPrimaryEvent<T>>,
 }
 
+impl<T: HasId + Debug> Default for Primary<T> {
+    fn default() -> Self {
+        Self {
+            inner: None,
+            changes: Vec::new(),
+        }
+    }
+}
+
 impl<T> std::fmt::Debug for Primary<T>
 where
     T: HasId + Debug,
@@ -103,11 +112,5 @@ where
         S: StreamEvents<Self::EventType>,
     {
         stream.stream(std::mem::replace(&mut self.changes, Vec::new()));
-    }
-}
-
-impl<T: HasId + Default + Clone + Debug> Default for Primary<T> {
-    fn default() -> Self {
-        Primary::new(T::default())
     }
 }

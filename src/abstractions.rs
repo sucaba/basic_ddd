@@ -99,11 +99,12 @@ pub trait StreamEvents<TEvent>: Sized {
         self.stream(std::iter::once(event));
     }
 
-    fn flush<S>(&mut self, s: &mut S)
+    fn flush<S, InnerEvent>(&mut self, s: &mut S)
     where
-        S: Streamable<EventType = TEvent>,
+        TEvent: From<InnerEvent>,
+        S: Streamable<EventType = InnerEvent>,
     {
-        s.stream_to(self)
+        s.stream_to(&mut StreamAdapter::new(self))
     }
 }
 
@@ -128,23 +129,7 @@ impl<TEvent> StreamEvents<TEvent> for Vec<TEvent> {
     }
 }
 
-pub trait AdaptStream<SE>
-where
-    Self: Sized + StreamEvents<SE>,
-{
-    fn adapt<'a>(&'a mut self) -> StreamAdapter<'a, SE, Self>;
-}
-
-impl<SE, S> AdaptStream<SE> for S
-where
-    S: StreamEvents<SE>,
-{
-    fn adapt<'a>(&'a mut self) -> StreamAdapter<'a, SE, Self> {
-        StreamAdapter::new(self)
-    }
-}
-
-pub struct StreamAdapter<'a, SE, S>(&'a mut S, std::marker::PhantomData<SE>)
+struct StreamAdapter<'a, SE, S>(&'a mut S, std::marker::PhantomData<SE>)
 where
     S: StreamEvents<SE>;
 
@@ -166,6 +151,6 @@ where
     where
         I: IntoIterator<Item = E>,
     {
-        self.0.stream(events.into_iter().map(|e| e.into()))
+        self.0.stream(events.into_iter().map(Into::into))
     }
 }

@@ -58,6 +58,18 @@ pub struct OwnedCollection<T: HasId + HasOwner> {
     changes: Vec<DbOwnedEvent<T>>,
 }
 
+impl<T: HasId + HasOwner + Debug> Debug for OwnedCollection<T>
+where
+    Id<T>: Debug,
+    Id<T::OwnerType>: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        Debug::fmt(&self.inner, f)?;
+        f.write_str("\nchanges:\n")?;
+        Debug::fmt(&self.changes, f)
+    }
+}
+
 impl<T, I> std::ops::Index<I> for OwnedCollection<T>
 where
     T: HasId + HasOwner,
@@ -89,6 +101,18 @@ where
 {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<T> Extend<T> for OwnedCollection<T>
+where
+    T: HasId + HasOwner + Clone,
+    Id<T>: Eq,
+{
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        for item in iter.into_iter() {
+            self.add(item);
+        }
     }
 }
 
@@ -156,18 +180,6 @@ where
             true
         } else {
             false
-        }
-    }
-}
-
-impl<T> Extend<T> for OwnedCollection<T>
-where
-    T: HasId + HasOwner + Clone,
-    Id<T>: Eq,
-{
-    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        for item in iter.into_iter() {
-            self.add(item);
         }
     }
 }
