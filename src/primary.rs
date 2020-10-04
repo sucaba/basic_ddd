@@ -87,12 +87,23 @@ impl<T: HasId + Debug> Primary<T> {
         self.inner.as_ref().expect("not deleted")
     }
 
-    pub fn update(&mut self, row: T)
+    pub fn set(&mut self, row: T)
     where
         T: Clone,
     {
         self.inner = Some(row.clone());
         self.changes.push(DbPrimaryEvent::Updated(row));
+    }
+
+    pub fn update<F>(&mut self, f: F)
+    where
+        F: FnOnce(T) -> T,
+        T: Clone,
+    {
+        self.inner = self.inner.take().map(f);
+        self.changes.push(DbPrimaryEvent::Updated(
+            self.inner.clone().expect("Cannot update deleted"),
+        ));
     }
 
     pub fn delete(&mut self, id: Id<T>) {
@@ -111,6 +122,6 @@ where
     where
         S: StreamEvents<Self::EventType>,
     {
-        stream.stream(std::mem::replace(&mut self.changes, Vec::new()));
+        stream.stream(std::mem::take(&mut self.changes));
     }
 }
