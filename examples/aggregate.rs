@@ -68,7 +68,7 @@ impl Order {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct OrderPrimary {
     id: i32,
     item_count: usize,

@@ -47,7 +47,7 @@ where
     }
 }
 
-pub struct Primary<T: HasId + Debug> {
+pub struct Primary<T: HasId> {
     inner: Option<T>,
     changes: Vec<DbPrimaryEvent<T>>,
 }
@@ -72,7 +72,10 @@ where
     }
 }
 
-impl<T: HasId + Debug> Primary<T> {
+impl<T: HasId> Primary<T>
+where
+    DbPrimaryEvent<T>: Sized,
+{
     pub fn new(row: T) -> Self
     where
         T: Clone,
@@ -110,11 +113,32 @@ impl<T: HasId + Debug> Primary<T> {
         self.inner = None;
         self.changes.push(DbPrimaryEvent::Deleted(id));
     }
+
+    fn optimize(mut events: Vec<DbPrimaryEvent<T>>) -> Vec<DbPrimaryEvent<T>>
+    where
+        T: Default,
+    {
+        use std::mem::take;
+        use DbPrimaryEvent::*;
+
+        match events.as_mut_slice() {
+            [Created(_), Updated(m), ..] => {
+                events[1] = Created(take(m));
+                events.remove(0);
+                events
+            }
+            [Updated(_), Updated(_), ..] => {
+                events.remove(0);
+                events
+            }
+            _ => events,
+        }
+    }
 }
 
 impl<T> Streamable for Primary<T>
 where
-    T: HasId + Debug,
+    T: HasId + Default,
 {
     type EventType = DbPrimaryEvent<T>;
 
@@ -122,6 +146,73 @@ where
     where
         S: StreamEvents<Self::EventType>,
     {
-        stream.stream(std::mem::take(&mut self.changes));
+        let optimized = Self::optimize(std::mem::take(&mut self.changes));
+        stream.stream(optimized);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[derive(Debug, Clone, Eq, PartialEq, Default)]
+    struct MyEntity {
+        id: i32,
+        name: String,
+    }
+
+    impl HasId for MyEntity {
+        type IdType = i32;
+
+        fn id(&self) -> Id<Self> {
+            Id::new(self.id)
+        }
+    }
+
+    #[test]
+    fn should_combine_create_update_into_create() {
+        let mut sut = Primary::new(MyEntity {
+            id: 42,
+            name: "foo".into(),
+        });
+        sut.update(|mut x| {
+            x.name = "bar".into();
+            x
+        });
+
+        assert_eq!(
+            sut.commit_changes(),
+            vec![DbPrimaryEvent::Created(MyEntity {
+                id: 42,
+                name: "bar".into(),
+            })]
+        );
+    }
+
+    #[test]
+    fn should_combine_update_update() {
+        let mut sut = Primary::new(MyEntity {
+            id: 42,
+            name: "foo".into(),
+        });
+        let _ = sut.commit_changes();
+
+        sut.update(|mut x| {
+            x.name = "ignored".into();
+            x
+        });
+        sut.update(|mut x| {
+            x.name = "bar".into();
+            x
+        });
+
+        assert_eq!(
+            sut.commit_changes(),
+            vec![DbPrimaryEvent::Updated(MyEntity {
+                id: 42,
+                name: "bar".into(),
+            })]
+        );
     }
 }
