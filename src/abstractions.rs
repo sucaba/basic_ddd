@@ -1,6 +1,8 @@
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::fmt::{Debug, Formatter};
 
+//pub type Result<T> = std::result::Result<T, Error>;
+
 pub trait HasId: Sized {
     type IdType;
 

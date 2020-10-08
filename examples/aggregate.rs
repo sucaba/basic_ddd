@@ -55,6 +55,10 @@ impl Order {
         }
     }
 
+    /*
+     * Add item by preserving inner invariant:
+     * `item_count` should always match `items.len()`
+     */
     fn add_item(&mut self, item: OrderItem) {
         self.items.add(item);
         self.primary.update(|mut p| {
