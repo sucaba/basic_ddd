@@ -1,5 +1,6 @@
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::fmt::{Debug, Formatter};
+use std::hash::{Hash, Hasher};
 
 //pub type Result<T> = std::result::Result<T, Error>;
 
@@ -18,6 +19,15 @@ pub struct Id<T: HasId> {
     marker: std::marker::PhantomData<T>,
 }
 
+impl<T: HasId> Hash for Id<T>
+where
+    T::IdType: Hash,
+{
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
 impl<T: HasId> Id<T> {
     pub fn new(id: T::IdType) -> Self {
         Self {
@@ -29,6 +39,13 @@ impl<T: HasId> Id<T> {
     pub fn id(&self) -> &T::IdType {
         &self.id
     }
+}
+
+impl<T: HasId> Copy for Id<T>
+where
+    Self: Clone,
+    T::IdType: Copy,
+{
 }
 
 impl<T: HasId> Clone for Id<T>
@@ -76,6 +93,11 @@ where
     fn eq(&self, y: &Id<T>) -> bool {
         self.id.eq(&y.id)
     }
+}
+
+pub(crate) enum EventMergeResult {
+    Combined,
+    Annihilated,
 }
 
 pub trait Streamable {
