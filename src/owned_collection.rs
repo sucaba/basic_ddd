@@ -312,6 +312,7 @@ mod owned_collection_tests {
     use crate::test_utils::*;
     use pretty_assertions::assert_eq;
     use std::cmp::{Eq, PartialEq};
+    use std::rc::Rc;
     use Color::*;
 
     struct TestOwner {
@@ -369,15 +370,16 @@ mod owned_collection_tests {
     const ANY_NOT_USED_ENTRY_ID: usize = 10000;
     const EXISTING_ID: usize = 0;
 
-    fn colored(seed: usize, c: Color) -> TestEntry {
+    fn colored(seed: usize, c: Color) -> Rc<TestEntry> {
         TestEntry {
             owner_id: 1,
             child_id: (100 + seed).to_string(),
             name: format!("{:#?}", c),
         }
+        .into()
     }
 
-    fn setup_saved() -> OwnedCollection<TestEntry> {
+    fn setup_saved() -> OwnedCollection<Rc<TestEntry>> {
         let mut sut = OwnedCollection::new();
         sut.update_or_add(colored(EXISTING_ID, None));
         sut.update_or_add(colored(ANY_NOT_USED_ENTRY_ID, None));
@@ -385,7 +387,7 @@ mod owned_collection_tests {
         sut
     }
 
-    fn setup_new() -> OwnedCollection<TestEntry> {
+    fn setup_new() -> OwnedCollection<Rc<TestEntry>> {
         OwnedCollection::new()
     }
 
@@ -526,7 +528,12 @@ mod owned_collection_tests {
         assert_eq!(sorted(sut.commit_changes()), vec![Created(colored(3, Red))]);
     }
 
-    fn sorted(mut events: Vec<DbOwnedEvent<TestEntry>>) -> Vec<DbOwnedEvent<TestEntry>> {
+    fn sorted<T>(mut events: Vec<DbOwnedEvent<T>>) -> Vec<DbOwnedEvent<T>>
+    where
+        T: GetId,
+        T::IdentifiableType: Owned,
+        Id<T::IdentifiableType>: Clone + Ord,
+    {
         events.sort_by_key(DbOwnedEvent::get_id);
         events
     }

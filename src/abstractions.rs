@@ -1,6 +1,7 @@
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 //pub type Result<T> = std::result::Result<T, Error>;
 
@@ -24,6 +25,29 @@ where
 
     fn get_id(&self) -> Id<Self::IdentifiableType> {
         Identifiable::id(self)
+    }
+}
+
+impl<T> GetId for Rc<T>
+where
+    T: GetId,
+{
+    type IdentifiableType = T::IdentifiableType;
+
+    fn get_id(&self) -> Id<Self::IdentifiableType> {
+        GetId::get_id(std::ops::Deref::deref(self))
+    }
+}
+
+impl<T> GetId for Id<T>
+where
+    T: Identifiable,
+    Self: Clone,
+{
+    type IdentifiableType = T;
+
+    fn get_id(&self) -> Id<Self::IdentifiableType> {
+        self.clone()
     }
 }
 

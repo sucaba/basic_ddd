@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::rc::Rc;
+
 use basic_ddd::{
     DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, Owned, OwnedCollection, Primary, StreamEvents,
     Streamable,
@@ -11,7 +13,7 @@ where
     Self: Streamable,
 {
     primary: Primary<OrderPrimary>,
-    items: OwnedCollection<OrderItem>,
+    items: OwnedCollection<Rc<OrderItem>>,
 
     changes: Vec<<Self as Streamable>::EventType>,
 }
@@ -19,7 +21,7 @@ where
 #[derive(Debug)]
 enum OrderEvent {
     Primary(<Primary<OrderPrimary> as Streamable>::EventType),
-    Item(<OwnedCollection<OrderItem> as Streamable>::EventType),
+    Item(<OwnedCollection<Rc<OrderItem>> as Streamable>::EventType),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -51,8 +53,8 @@ impl From<DbPrimaryEvent<OrderPrimary>> for OrderEvent {
     }
 }
 
-impl From<DbOwnedEvent<OrderItem>> for OrderEvent {
-    fn from(src: DbOwnedEvent<OrderItem>) -> Self {
+impl From<DbOwnedEvent<Rc<OrderItem>>> for OrderEvent {
+    fn from(src: DbOwnedEvent<Rc<OrderItem>>) -> Self {
         OrderEvent::Item(src)
     }
 }
@@ -62,7 +64,7 @@ impl Order {
         primary.item_count = 0;
 
         Self {
-            primary: Primary::new(primary),
+            primary: Primary::new(primary.into()),
             items: Default::default(),
             changes: Default::default(),
         }
@@ -76,7 +78,7 @@ impl Order {
      * Add item by preserving inner invariant:
      * `item_count` should always match `items.len()`
      */
-    fn add_new_item(&mut self, item: OrderItem) -> std::result::Result<(), OrderItem> {
+    fn add_new_item(&mut self, item: Rc<OrderItem>) -> std::result::Result<(), Rc<OrderItem>> {
         let result = self.items.add_new(item);
         if result.is_ok() {
             self.primary.update(|mut p| {
@@ -115,7 +117,7 @@ fn main() {
         item_count: 777, // ignored
     });
     aggregate
-        .add_new_item(OrderItem { id: 1001 })
+        .add_new_item(OrderItem { id: 1001 }.into())
         .expect("item already exists");
 
     assert_eq!(1, aggregate.item_count());
