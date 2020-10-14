@@ -148,7 +148,7 @@ where
 {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for item in iter.into_iter() {
-            self.add(item);
+            self.update_or_add(item);
         }
     }
 }
@@ -188,7 +188,18 @@ where
         self.inner.len()
     }
 
-    pub fn add(&mut self, item: T)
+    pub fn update_or_add(&mut self, item: T)
+    where
+        T: Clone,
+        Id<T>: Eq,
+    {
+        let _ = self.update(item).or_else(|x| self.add_new(x));
+    }
+
+    /**
+     * Updates existing item or returns item back as a Result::Err
+     */
+    pub fn update(&mut self, item: T) -> std::result::Result<(), T>
     where
         T: Clone,
         Id<T>: Eq,
@@ -196,9 +207,27 @@ where
         if let Some(pos) = self.position_by_id(&item.id()) {
             self.inner[pos] = item.clone();
             self.changes.push(Updated(item));
+            Ok(())
         } else {
+            Err(item)
+        }
+    }
+
+    /**
+     * Inserts a new item and returns `Ok(())` if item with the same id does not exist.
+     * Returns `Err(item)` if item with the same already exists.
+     */
+    pub fn add_new(&mut self, item: T) -> std::result::Result<(), T>
+    where
+        T: Clone,
+        Id<T>: Eq,
+    {
+        if let None = self.position_by_id(&item.id()) {
             self.inner.push(item.clone());
             self.changes.push(Created(item));
+            Ok(())
+        } else {
+            Err(item)
         }
     }
 
@@ -332,8 +361,8 @@ mod owned_collection_tests {
 
     fn setup_saved() -> OwnedCollection<TestEntry> {
         let mut sut = OwnedCollection::new();
-        sut.add(colored(EXISTING_ID, None));
-        sut.add(colored(ANY_NOT_USED_ENTRY_ID, None));
+        sut.update_or_add(colored(EXISTING_ID, None));
+        sut.update_or_add(colored(ANY_NOT_USED_ENTRY_ID, None));
         sut.assume_changes_saved();
         sut
     }
@@ -346,8 +375,8 @@ mod owned_collection_tests {
     fn creation_event_is_streamed() {
         let mut sut = setup_saved();
 
-        sut.add(colored(1, Red));
-        sut.add(colored(2, Red));
+        sut.update_or_add(colored(1, Red));
+        sut.update_or_add(colored(2, Red));
 
         assert_eq!(
             sorted(sut.commit_changes()),
@@ -359,7 +388,7 @@ mod owned_collection_tests {
     fn update_event_is_streamed() {
         let mut sut = setup_saved();
 
-        sut.add(colored(EXISTING_ID, Red));
+        sut.update_or_add(colored(EXISTING_ID, Red));
 
         assert_eq!(
             sut.commit_changes(),
@@ -396,8 +425,8 @@ mod owned_collection_tests {
     fn should_optimize_create_update_of_single_entry() {
         let mut sut = setup_new();
 
-        sut.add(colored(1, Red));
-        sut.add(colored(1, Blue));
+        sut.update_or_add(colored(1, Red));
+        sut.update_or_add(colored(1, Blue));
 
         assert_eq!(sut.commit_changes(), vec![Created(colored(1, Blue))]);
     }
@@ -406,11 +435,11 @@ mod owned_collection_tests {
     fn should_optimize_create_update_of_multiple_entries() {
         let mut sut = setup_new();
 
-        sut.add(colored(1, Red));
-        sut.add(colored(1, Blue));
+        sut.update_or_add(colored(1, Red));
+        sut.update_or_add(colored(1, Blue));
 
-        sut.add(colored(2, Red));
-        sut.add(colored(2, Blue));
+        sut.update_or_add(colored(2, Red));
+        sut.update_or_add(colored(2, Blue));
 
         assert_eq!(
             sorted(sut.commit_changes()),
@@ -422,7 +451,7 @@ mod owned_collection_tests {
     fn should_optimize_update_delete() {
         let mut sut = setup_saved();
 
-        sut.add(colored(EXISTING_ID, Red));
+        sut.update_or_add(colored(EXISTING_ID, Red));
 
         let id = colored(EXISTING_ID, Red).id();
         sut.remove_by_id(&id);
@@ -434,7 +463,7 @@ mod owned_collection_tests {
     fn should_optimize_create_delete_by_annihilation() {
         let mut sut = setup_new();
 
-        sut.add(colored(1, Red));
+        sut.update_or_add(colored(1, Red));
         sut.remove_by_id(&colored(1, Blue).id());
 
         assert_eq!(sorted(sut.commit_changes()), vec![]);
@@ -445,7 +474,7 @@ mod owned_collection_tests {
         let mut sut = setup_new();
 
         for _ in 0..3 {
-            sut.add(colored(1, Red));
+            sut.update_or_add(colored(1, Red));
             sut.remove_by_id(&colored(1, Blue).id());
         }
 
@@ -456,10 +485,10 @@ mod owned_collection_tests {
     fn should_optimize_create_delete_by_annihilation_independently_of_other_entries() {
         let mut sut = setup_new();
 
-        sut.add(colored(1, Red));
+        sut.update_or_add(colored(1, Red));
         sut.remove_by_id(&colored(1, Blue).id());
 
-        sut.add(colored(2, Red));
+        sut.update_or_add(colored(2, Red));
 
         assert_eq!(sorted(sut.commit_changes()), vec![Created(colored(2, Red))]);
     }
@@ -468,13 +497,13 @@ mod owned_collection_tests {
     fn should_optimize_multiple_create_delete_by_annihilation_independently_of_other_entries() {
         let mut sut = setup_new();
 
-        sut.add(colored(1, Red));
+        sut.update_or_add(colored(1, Red));
         sut.remove_by_id(&colored(1, Blue).id());
 
-        sut.add(colored(2, Red));
+        sut.update_or_add(colored(2, Red));
         sut.remove_by_id(&colored(2, Blue).id());
 
-        sut.add(colored(3, Red));
+        sut.update_or_add(colored(3, Red));
 
         assert_eq!(sorted(sut.commit_changes()), vec![Created(colored(3, Red))]);
     }

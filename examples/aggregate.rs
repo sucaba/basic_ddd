@@ -22,6 +22,17 @@ enum OrderEvent {
     Item(<OwnedCollection<OrderItem> as Streamable>::EventType),
 }
 
+#[derive(Debug, Clone, Default)]
+struct OrderPrimary {
+    id: i32,
+    item_count: usize,
+}
+
+#[derive(Debug, Clone)]
+struct OrderItem {
+    id: i32,
+}
+
 impl Streamable for Order {
     type EventType = OrderEvent;
 
@@ -47,7 +58,9 @@ impl From<DbOwnedEvent<OrderItem>> for OrderEvent {
 }
 
 impl Order {
-    fn new(primary: OrderPrimary) -> Self {
+    fn new(mut primary: OrderPrimary) -> Self {
+        primary.item_count = 0;
+
         Self {
             primary: Primary::new(primary),
             items: Default::default(),
@@ -55,28 +68,25 @@ impl Order {
         }
     }
 
+    fn item_count(&self) -> usize {
+        self.primary.get().item_count
+    }
+
     /*
      * Add item by preserving inner invariant:
      * `item_count` should always match `items.len()`
      */
-    fn add_item(&mut self, item: OrderItem) {
-        self.items.add(item);
-        self.primary.update(|mut p| {
-            p.item_count += 1;
-            p
-        });
+    fn add_new_item(&mut self, item: OrderItem) -> std::result::Result<(), OrderItem> {
+        let result = self.items.add_new(item);
+        if result.is_ok() {
+            self.primary.update(|mut p| {
+                p.item_count += 1;
+                p
+            });
+        }
+
+        result
     }
-}
-
-#[derive(Debug, Clone, Default)]
-struct OrderPrimary {
-    id: i32,
-    item_count: usize,
-}
-
-#[derive(Debug, Clone)]
-struct OrderItem {
-    id: i32,
 }
 
 impl HasId for OrderPrimary {
@@ -102,9 +112,12 @@ impl HasId for OrderItem {
 fn main() {
     let mut aggregate = Order::new(OrderPrimary {
         id: 42,
-        item_count: 0,
+        item_count: 777, // ignored
     });
-    aggregate.add_item(OrderItem { id: 1001 });
+    aggregate
+        .add_new_item(OrderItem { id: 1001 })
+        .expect("item already exists");
 
+    assert_eq!(1, aggregate.item_count());
     println!("events:\n{:#?}", aggregate.commit_changes());
 }
