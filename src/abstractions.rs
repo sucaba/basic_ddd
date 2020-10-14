@@ -4,22 +4,39 @@ use std::hash::{Hash, Hasher};
 
 //pub type Result<T> = std::result::Result<T, Error>;
 
-pub trait HasId: Sized {
+pub trait Identifiable: Sized {
     type IdType;
 
     fn id(&self) -> Id<Self>;
 }
 
-pub trait HasOwner {
-    type OwnerType: HasId;
+pub trait GetId {
+    type IdentifiableType: Identifiable;
+
+    fn get_id(&self) -> Id<Self::IdentifiableType>;
 }
 
-pub struct Id<T: HasId> {
+impl<T> GetId for T
+where
+    T: Identifiable,
+{
+    type IdentifiableType = T;
+
+    fn get_id(&self) -> Id<Self::IdentifiableType> {
+        Identifiable::id(self)
+    }
+}
+
+pub trait Owned {
+    type OwnerType: Identifiable;
+}
+
+pub struct Id<T: Identifiable> {
     id: T::IdType,
     marker: std::marker::PhantomData<T>,
 }
 
-impl<T: HasId> Hash for Id<T>
+impl<T: Identifiable> Hash for Id<T>
 where
     T::IdType: Hash,
 {
@@ -28,7 +45,7 @@ where
     }
 }
 
-impl<T: HasId> Id<T> {
+impl<T: Identifiable> Id<T> {
     pub fn new(id: T::IdType) -> Self {
         Self {
             id,
@@ -41,14 +58,14 @@ impl<T: HasId> Id<T> {
     }
 }
 
-impl<T: HasId> Copy for Id<T>
+impl<T: Identifiable> Copy for Id<T>
 where
     Self: Clone,
     T::IdType: Copy,
 {
 }
 
-impl<T: HasId> Clone for Id<T>
+impl<T: Identifiable> Clone for Id<T>
 where
     T::IdType: Clone,
 {
@@ -57,7 +74,7 @@ where
     }
 }
 
-impl<T: HasId> Debug for Id<T>
+impl<T: Identifiable> Debug for Id<T>
 where
     T::IdType: Debug,
 {
@@ -66,7 +83,7 @@ where
     }
 }
 
-impl<T: HasId> Ord for Id<T>
+impl<T: Identifiable> Ord for Id<T>
 where
     T::IdType: Ord,
 {
@@ -75,7 +92,7 @@ where
     }
 }
 
-impl<T: HasId> PartialOrd for Id<T>
+impl<T: Identifiable> PartialOrd for Id<T>
 where
     T::IdType: PartialOrd,
 {
@@ -84,9 +101,9 @@ where
     }
 }
 
-impl<T: HasId> Eq for Id<T> where T::IdType: Eq {}
+impl<T: Identifiable> Eq for Id<T> where T::IdType: Eq {}
 
-impl<T: HasId> PartialEq for Id<T>
+impl<T: Identifiable> PartialEq for Id<T>
 where
     T::IdType: PartialEq,
 {

@@ -5,14 +5,14 @@ use DbPrimaryEvent::*;
 
 pub enum DbPrimaryEvent<T>
 where
-    T: HasId,
+    T: GetId,
 {
     Created(T),
     Updated(T),
-    Deleted(Id<T>),
+    Deleted(Id<T::IdentifiableType>),
 }
 
-impl<T: HasId> DbPrimaryEvent<T> {
+impl<T: GetId> DbPrimaryEvent<T> {
     fn merge(self, other: Self) -> Option<Self> {
         match (self, other) {
             (Created(_), Updated(m)) => Some(Created(m)),
@@ -26,8 +26,8 @@ impl<T: HasId> DbPrimaryEvent<T> {
 
 impl<T> std::fmt::Debug for DbPrimaryEvent<T>
 where
-    T: Debug + HasId,
-    Id<T>: Debug,
+    T: Debug + GetId,
+    Id<T::IdentifiableType>: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -40,15 +40,15 @@ where
 
 impl<T> Eq for DbPrimaryEvent<T>
 where
-    T: HasId + Eq,
-    Id<T>: Eq,
+    T: GetId + Eq,
+    Id<T::IdentifiableType>: Eq,
 {
 }
 
 impl<T> PartialEq for DbPrimaryEvent<T>
 where
-    T: HasId + PartialEq,
-    Id<T>: PartialEq,
+    T: GetId + PartialEq,
+    Id<T::IdentifiableType>: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -60,12 +60,12 @@ where
     }
 }
 
-pub struct Primary<T: HasId> {
+pub struct Primary<T: GetId> {
     inner: Option<T>,
     changes: Vec<DbPrimaryEvent<T>>,
 }
 
-impl<T: HasId + Debug> Default for Primary<T> {
+impl<T: GetId + Debug> Default for Primary<T> {
     fn default() -> Self {
         Self {
             inner: None,
@@ -76,7 +76,7 @@ impl<T: HasId + Debug> Default for Primary<T> {
 
 impl<T> std::fmt::Debug for Primary<T>
 where
-    T: HasId + Debug,
+    T: GetId + Debug,
     Vec<DbPrimaryEvent<T>>: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -85,7 +85,7 @@ where
     }
 }
 
-impl<T: HasId> Primary<T>
+impl<T: GetId> Primary<T>
 where
     DbPrimaryEvent<T>: Sized,
 {
@@ -123,7 +123,7 @@ where
 
     pub fn delete(&mut self) -> Option<T> {
         if let Some(created) = self.inner.as_ref() {
-            self.changes.push(Deleted(created.id()));
+            self.changes.push(Deleted(created.get_id()));
             self.inner.take()
         } else {
             None
@@ -144,7 +144,7 @@ where
 
 impl<T> Streamable for Primary<T>
 where
-    T: HasId,
+    T: GetId,
 {
     type EventType = DbPrimaryEvent<T>;
 
@@ -169,7 +169,7 @@ mod tests {
         name: String,
     }
 
-    impl HasId for MyEntity {
+    impl Identifiable for MyEntity {
         type IdType = i32;
 
         fn id(&self) -> Id<Self> {

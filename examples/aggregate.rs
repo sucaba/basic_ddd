@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use basic_ddd::{
-    DbOwnedEvent, DbPrimaryEvent, HasId, HasOwner, Id, OwnedCollection, Primary, StreamEvents,
+    DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, Owned, OwnedCollection, Primary, StreamEvents,
     Streamable,
 };
 
@@ -89,7 +89,7 @@ impl Order {
     }
 }
 
-impl HasId for OrderPrimary {
+impl Identifiable for OrderPrimary {
     type IdType = i32;
 
     fn id(&self) -> Id<Self> {
@@ -97,11 +97,11 @@ impl HasId for OrderPrimary {
     }
 }
 
-impl HasOwner for OrderItem {
+impl Owned for OrderItem {
     type OwnerType = OrderPrimary;
 }
 
-impl HasId for OrderItem {
+impl Identifiable for OrderItem {
     type IdType = i32;
 
     fn id(&self) -> Id<Self> {
