@@ -262,16 +262,19 @@ where
         self.changes.push(AllDeleted(owner_id));
     }
 
-    pub fn remove_by_id(&mut self, id: &Id<T::IdentifiableType>) -> bool
+    pub fn remove_by_id<'a>(
+        &mut self,
+        id: &'a Id<T::IdentifiableType>,
+    ) -> Result<(), NotFound<&'a Id<T::IdentifiableType>>>
     where
         Id<T::IdentifiableType>: Eq + Clone,
     {
         if let Some(i) = self.position_by_id(id) {
             self.inner.remove(i);
             self.changes.push(Deleted(id.clone()));
-            true
+            Ok(())
         } else {
-            false
+            Err(NotFound(id))
         }
     }
 
@@ -421,7 +424,9 @@ mod owned_collection_tests {
     fn delete_event_is_streamed() {
         let mut sut = setup_saved();
 
-        let removed = sut.remove_by_id(&colored(EXISTING_ID, Red).get_id());
+        let removed = sut
+            .remove_by_id(&colored(EXISTING_ID, Red).get_id())
+            .is_ok();
 
         assert!(removed);
 
@@ -475,7 +480,7 @@ mod owned_collection_tests {
         sut.update_or_add(colored(EXISTING_ID, Red));
 
         let id = colored(EXISTING_ID, Red).get_id();
-        sut.remove_by_id(&id);
+        sut.remove_by_id(&id).unwrap();
 
         assert_eq!(sorted(sut.commit_changes()), vec![Deleted(id)]);
     }
@@ -485,7 +490,7 @@ mod owned_collection_tests {
         let mut sut = setup_new();
 
         sut.update_or_add(colored(1, Red));
-        sut.remove_by_id(&colored(1, Blue).get_id());
+        sut.remove_by_id(&colored(1, Blue).get_id()).unwrap();
 
         assert_eq!(sorted(sut.commit_changes()), vec![]);
     }
@@ -496,7 +501,7 @@ mod owned_collection_tests {
 
         for _ in 0..3 {
             sut.update_or_add(colored(1, Red));
-            sut.remove_by_id(&colored(1, Blue).get_id());
+            sut.remove_by_id(&colored(1, Blue).get_id()).unwrap();
         }
 
         assert_eq!(sorted(sut.commit_changes()), vec![]);
@@ -507,7 +512,7 @@ mod owned_collection_tests {
         let mut sut = setup_new();
 
         sut.update_or_add(colored(1, Red));
-        sut.remove_by_id(&colored(1, Blue).get_id());
+        sut.remove_by_id(&colored(1, Blue).get_id()).unwrap();
 
         sut.update_or_add(colored(2, Red));
 
@@ -519,10 +524,10 @@ mod owned_collection_tests {
         let mut sut = setup_new();
 
         sut.update_or_add(colored(1, Red));
-        sut.remove_by_id(&colored(1, Blue).get_id());
+        sut.remove_by_id(&colored(1, Blue).get_id()).unwrap();
 
         sut.update_or_add(colored(2, Red));
-        sut.remove_by_id(&colored(2, Blue).get_id());
+        sut.remove_by_id(&colored(2, Blue).get_id()).unwrap();
 
         sut.update_or_add(colored(3, Red));
 
