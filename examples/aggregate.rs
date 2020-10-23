@@ -3,8 +3,8 @@
 use std::rc::Rc;
 
 use basic_ddd::{
-    DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, Owned, OwnedCollection, Primary, StreamEvents,
-    Streamable,
+    CreationResult, DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, Owned, OwnedCollection,
+    Primary, StreamEvents, Streamable,
 };
 
 #[derive(Default, Debug)]
@@ -78,16 +78,13 @@ impl Order {
      * Add item by preserving inner invariant:
      * `item_count` should always match `items.len()`
      */
-    fn add_new_item(&mut self, item: Rc<OrderItem>) -> std::result::Result<(), Rc<OrderItem>> {
-        let result = self.items.add_new(item);
-        if result.is_ok() {
-            self.primary.update(|mut p| {
-                p.item_count += 1;
-                p
-            });
-        }
-
-        result
+    fn add_new_item(&mut self, item: Rc<OrderItem>) -> CreationResult<Rc<OrderItem>> {
+        self.items.add_new(item)?;
+        self.primary.update(|mut p| {
+            p.item_count += 1;
+            p
+        });
+        Ok(())
     }
 }
 
@@ -111,15 +108,22 @@ impl Identifiable for OrderItem {
     }
 }
 
-fn main() {
+fn main() -> basic_ddd::Result<()> {
+    create_new_order()?;
+    Ok(())
+}
+
+fn create_new_order() -> basic_ddd::Result<()> {
     let mut aggregate = Order::new(OrderPrimary {
         id: 42,
         item_count: 777, // ignored
     });
-    aggregate
-        .add_new_item(OrderItem { id: 1001 }.into())
-        .expect("item already exists");
+    aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
+
+    // Following causes: Already exists ... error
+    // aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
 
     assert_eq!(1, aggregate.item_count());
     println!("events:\n{:#?}", aggregate.commit_changes());
+    Ok(())
 }

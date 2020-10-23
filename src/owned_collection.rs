@@ -1,4 +1,5 @@
 use super::abstractions::*;
+use crate::result::{AlreadyExists, CreationResult, NotFound, UpdateResult};
 use std::cmp::{Eq, PartialEq};
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -211,13 +212,13 @@ where
         T: Clone,
         Id<T::IdentifiableType>: Eq,
     {
-        let _ = self.update(item).or_else(|x| self.add_new(x));
+        let _ = self.update(item).or_else(|NotFound(x)| self.add_new(x));
     }
 
     /**
      * Updates existing item or returns item back as a Result::Err
      */
-    pub fn update(&mut self, item: T) -> std::result::Result<(), T>
+    pub fn update(&mut self, item: T) -> UpdateResult<T>
     where
         T: Clone,
         Id<T::IdentifiableType>: Eq,
@@ -227,7 +228,7 @@ where
             self.changes.push(Updated(item));
             Ok(())
         } else {
-            Err(item)
+            Err(NotFound(item))
         }
     }
 
@@ -235,7 +236,7 @@ where
      * Inserts a new item and returns `Ok(())` if item with the same id does not exist.
      * Returns `Err(item)` if item with the same already exists.
      */
-    pub fn add_new(&mut self, item: T) -> std::result::Result<(), T>
+    pub fn add_new(&mut self, item: T) -> CreationResult<T>
     where
         T: Clone,
         Id<T::IdentifiableType>: Eq,
@@ -245,7 +246,7 @@ where
             self.changes.push(Created(item));
             Ok(())
         } else {
-            Err(item)
+            Err(AlreadyExists(item))
         }
     }
 
