@@ -1,4 +1,5 @@
 use super::abstractions::*;
+use crate::result::{NotFound, UpdateResult};
 use std::cmp::{Eq, PartialEq};
 use std::fmt::Debug;
 use DbPrimaryEvent::*;
@@ -103,30 +104,40 @@ where
         self.inner.as_ref().expect("not deleted")
     }
 
-    pub fn set(&mut self, row: T)
+    pub fn set(&mut self, row: T) -> UpdateResult<T>
     where
         T: Clone,
     {
-        self.inner = Some(row.clone());
-        self.changes.push(Updated(row));
+        if self.inner.is_some() {
+            self.inner = Some(row.clone());
+            self.changes.push(Updated(row));
+            Ok(())
+        } else {
+            Err(NotFound(row))
+        }
     }
 
-    pub fn update<F>(&mut self, f: F)
+    pub fn update<F>(&mut self, f: F) -> UpdateResult<()>
     where
         F: FnOnce(T) -> T,
         T: Clone,
     {
-        self.inner = self.inner.take().map(f);
-        self.changes
-            .push(Updated(self.inner.clone().expect("Cannot update deleted")));
+        if let Some(existing) = self.inner.take() {
+            let modified = f(existing);
+            self.inner = Some(modified.clone());
+            self.changes.push(Updated(modified));
+            Ok(())
+        } else {
+            Err(NotFound(()))
+        }
     }
 
-    pub fn delete(&mut self) -> Option<T> {
-        if let Some(created) = self.inner.as_ref() {
-            self.changes.push(Deleted(created.get_id()));
-            self.inner.take()
+    pub fn delete(&mut self) -> UpdateResult<(), T> {
+        if let Some(existing) = self.inner.take() {
+            self.changes.push(Deleted(existing.get_id()));
+            Ok(existing)
         } else {
-            None
+            Err(NotFound(()))
         }
     }
 
@@ -199,7 +210,8 @@ mod tests {
         sut.update(|mut x| {
             x.name = "bar".into();
             x
-        });
+        })
+        .unwrap();
 
         assert_eq!(
             sut.commit_changes(),
@@ -214,7 +226,7 @@ mod tests {
     fn should_annihilate_create_delete_changes() {
         let mut sut = setup_new();
 
-        sut.delete();
+        sut.delete().unwrap();
 
         assert_eq!(sut.commit_changes(), vec![]);
     }
@@ -227,13 +239,15 @@ mod tests {
             sut.update(|mut x| {
                 x.name = "ignored".into();
                 x
-            });
+            })
+            .unwrap();
         }
 
         sut.update(|mut x| {
             x.name = "bar".into();
             x
-        });
+        })
+        .unwrap();
 
         assert_eq!(
             sut.commit_changes(),
@@ -251,11 +265,13 @@ mod tests {
         sut.update(|mut x| {
             x.name = "ignored".into();
             x
-        });
+        })
+        .unwrap();
         sut.update(|mut x| {
             x.name = "bar".into();
             x
-        });
+        })
+        .unwrap();
 
         assert_eq!(
             sut.commit_changes(),
@@ -273,8 +289,9 @@ mod tests {
         sut.update(|mut x| {
             x.name = "ignored".into();
             x
-        });
-        sut.delete();
+        })
+        .unwrap();
+        sut.delete().unwrap();
 
         assert_eq!(
             sut.commit_changes(),
@@ -296,13 +313,15 @@ mod tests {
             sut.update(|mut x| {
                 x.name = "ignored".into();
                 x
-            });
+            })
+            .unwrap();
         }
 
         sut.update(|mut x| {
             x.name = "bar".into();
             x
-        });
+        })
+        .unwrap();
 
         assert_eq!(
             sut.commit_changes(),

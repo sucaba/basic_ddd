@@ -3,8 +3,8 @@
 use std::rc::Rc;
 
 use basic_ddd::{
-    CreationResult, DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, Owned, OwnedCollection,
-    Primary, StreamEvents, Streamable,
+    DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, Owned, OwnedCollection, Primary, Result,
+    StreamEvents, Streamable,
 };
 
 #[derive(Default, Debug)]
@@ -78,12 +78,14 @@ impl Order {
      * Add item by preserving inner invariant:
      * `item_count` should always match `items.len()`
      */
-    fn add_new_item(&mut self, item: Rc<OrderItem>) -> CreationResult<Rc<OrderItem>> {
+    fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
         self.items.add_new(item)?;
-        self.primary.update(|mut p| {
-            p.item_count += 1;
-            p
-        });
+        self.primary
+            .update(|mut p| {
+                p.item_count += 1;
+                p
+            })
+            .unwrap();
         Ok(())
     }
 }
@@ -108,12 +110,13 @@ impl Identifiable for OrderItem {
     }
 }
 
-fn main() -> basic_ddd::Result<()> {
-    create_new_order()?;
+fn main() -> Result<()> {
+    let order = create_new_order()?;
+    println!("{:#?}", order);
     Ok(())
 }
 
-fn create_new_order() -> basic_ddd::Result<()> {
+fn create_new_order() -> Result<Order> {
     let mut aggregate = Order::new(OrderPrimary {
         id: 42,
         item_count: 777, // ignored
@@ -125,5 +128,5 @@ fn create_new_order() -> basic_ddd::Result<()> {
 
     assert_eq!(1, aggregate.item_count());
     println!("events:\n{:#?}", aggregate.commit_changes());
-    Ok(())
+    Ok(aggregate)
 }
