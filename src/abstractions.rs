@@ -6,7 +6,7 @@ use std::rc::Rc;
 //pub type Result<T> = std::result::Result<T, Error>;
 
 pub trait Identifiable: Sized {
-    type IdType;
+    type IdType: Eq;
 
     fn id(&self) -> Id<Self>;
 }
@@ -125,12 +125,9 @@ where
     }
 }
 
-impl<T: Identifiable> Eq for Id<T> where T::IdType: Eq {}
+impl<T: Identifiable> Eq for Id<T> {}
 
-impl<T: Identifiable> PartialEq for Id<T>
-where
-    T::IdType: PartialEq,
-{
+impl<T: Identifiable> PartialEq for Id<T> {
     fn eq(&self, y: &Id<T>) -> bool {
         self.id.eq(&y.id)
     }

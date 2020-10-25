@@ -74,8 +74,6 @@ impl<T> PartialEq for DbOwnedEvent<T>
 where
     T: PartialEq + GetId,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: PartialEq,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -92,8 +90,6 @@ impl<T> Eq for DbOwnedEvent<T>
 where
     T: Eq + GetId,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Eq,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: Eq,
 {
 }
 
@@ -161,7 +157,6 @@ impl<T> Extend<T> for OwnedCollection<T>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Eq,
 {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for item in iter.into_iter() {
@@ -174,7 +169,7 @@ impl<T> Streamable for OwnedCollection<T>
 where
     T: GetId,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Eq + Hash + Clone,
+    Id<T::IdentifiableType>: Hash + Clone,
 {
     type EventType = DbOwnedEvent<T>;
 
@@ -210,7 +205,6 @@ where
     pub fn update_or_add(&mut self, item: T)
     where
         T: Clone,
-        Id<T::IdentifiableType>: Eq,
     {
         let _ = self.update(item).or_else(|NotFound(x)| self.add_new(x));
     }
@@ -221,7 +215,6 @@ where
     pub fn update(&mut self, item: T) -> UpdateResult<T>
     where
         T: Clone,
-        Id<T::IdentifiableType>: Eq,
     {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
             self.inner[pos] = item.clone();
@@ -239,7 +232,6 @@ where
     pub fn add_new(&mut self, item: T) -> CreationResult<T>
     where
         T: Clone,
-        Id<T::IdentifiableType>: Eq,
     {
         if let None = self.position_by_id(&item.get_id()) {
             self.inner.push(item.clone());
@@ -250,10 +242,7 @@ where
         }
     }
 
-    fn position_by_id(&self, id: &Id<T::IdentifiableType>) -> Option<usize>
-    where
-        Id<T::IdentifiableType>: Eq,
-    {
+    fn position_by_id(&self, id: &Id<T::IdentifiableType>) -> Option<usize> {
         self.inner.iter().position(|x| &x.get_id() == id)
     }
 
@@ -267,7 +256,7 @@ where
         id: &'a Id<T::IdentifiableType>,
     ) -> Result<(), NotFound<&'a Id<T::IdentifiableType>>>
     where
-        Id<T::IdentifiableType>: Eq + Clone,
+        Id<T::IdentifiableType>: Clone,
     {
         if let Some(i) = self.position_by_id(id) {
             self.inner.remove(i);
@@ -280,7 +269,7 @@ where
 
     fn optimize(events: Vec<DbOwnedEvent<T>>) -> Vec<DbOwnedEvent<T>>
     where
-        Id<T::IdentifiableType>: Eq + Hash + Clone,
+        Id<T::IdentifiableType>: Hash + Clone,
     {
         use std::collections::hash_map::Entry::*;
         use std::collections::HashMap;

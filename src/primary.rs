@@ -39,12 +39,7 @@ where
     }
 }
 
-impl<T> Eq for DbPrimaryEvent<T>
-where
-    T: GetId + Eq,
-    Id<T::IdentifiableType>: Eq,
-{
-}
+impl<T> Eq for DbPrimaryEvent<T> where T: GetId + Eq {}
 
 impl<T> PartialEq for DbPrimaryEvent<T>
 where
