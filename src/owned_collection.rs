@@ -221,8 +221,25 @@ where
 {
     type EventType = DbOwnedEvent<T>;
 
+    fn new_incomplete() -> Self {
+        Self::new()
+    }
+
     fn apply(&mut self, event: Self::EventType) {
-        todo!()
+        match event {
+            Created(x) => self.inner.push(x),
+            Updated(x) => {
+                if let Some(i) = self.position_by_id(&x.get_id()) {
+                    self.inner[i] = x;
+                }
+            }
+            Deleted(id) => {
+                if let Some(i) = self.position_by_id(&id) {
+                    self.inner.remove(i);
+                }
+            }
+            AllDeleted(_) => self.inner.clear(),
+        }
     }
 
     fn stream_to<S>(&mut self, stream: &mut S)

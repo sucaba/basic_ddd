@@ -1,12 +1,11 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
 use std::hash::Hash;
+use std::marker::PhantomData;
 use std::rc::Rc;
-use tcache::typeset::SingletonSet;
 
 use basic_ddd::{
-    DbOwnedEvent, DbPrimaryEvent, Error, Id, Identifiable, Owned, OwnedCollection, Primary, Result,
+    DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, Owned, OwnedCollection, Primary, Result,
     StreamEvents, Streamable,
 };
 
@@ -48,6 +47,14 @@ impl Identifiable for Order {
 
 impl Streamable for Order {
     type EventType = OrderEvent;
+
+    fn new_incomplete() -> Self {
+        Order {
+            primary: Primary::new_incomplete(),
+            items: OwnedCollection::new_incomplete(),
+            changes: Vec::new(),
+        }
+    }
 
     fn apply(&mut self, event: Self::EventType) {
         match event {
@@ -128,43 +135,68 @@ impl Identifiable for OrderItem {
     }
 }
 
-struct InMemoryStorage {
-    per_type: SingletonSet,
+struct InMemoryStorage<T, TEvent>
+where
+    T: Streamable<EventType = TEvent> + Identifiable,
+{
+    events: Vec<TEvent>,
+    marker: PhantomData<T>,
 }
 
-impl InMemoryStorage {
+impl<T, TEvent> InMemoryStorage<T, TEvent>
+where
+    T: Streamable<EventType = TEvent> + Identifiable,
+    TEvent: std::fmt::Debug,
+{
     pub fn new() -> Self {
         Self {
-            per_type: SingletonSet::new(),
+            events: Vec::new(),
+            marker: PhantomData,
         }
     }
 
-    pub fn load<T: 'static + Streamable + Clone + Identifiable>(&mut self, id: &Id<T>) -> Result<T>
+    pub fn load(&mut self, _id: &Id<T>) -> Result<T>
     where
         Id<T>: Hash,
+        TEvent: Clone,
     {
-        let map: &mut HashMap<Id<T>, T> = self.per_type.ensure(Default::default);
-        map.get(id)
-            .cloned()
-            .ok_or_else(|| Error::from_text("does not exist".into()))
+        let mut result = T::new_incomplete();
+        for e in &self.events {
+            println!("applying {:#?}", e);
+            result.apply(e.clone());
+        }
+        Ok(result)
     }
 
-    pub fn save<T: 'static + Identifiable>(&mut self, root: T) -> Result<()>
+    pub fn save(&mut self, mut root: T) -> Result<()>
     where
         Id<T>: Hash,
     {
-        let map: &mut HashMap<Id<T>, T> = self.per_type.ensure(Default::default);
-        map.insert(root.id(), root);
+        root.stream_to(self);
+        println!("events after save={:#?}", self.events);
         Ok(())
     }
 }
 
+impl<T, TEvent> StreamEvents<TEvent> for InMemoryStorage<T, TEvent>
+where
+    T: Streamable<EventType = TEvent> + Identifiable,
+{
+    fn stream<I>(&mut self, events: I)
+    where
+        I: IntoIterator<Item = TEvent>,
+    {
+        self.events.stream(events);
+    }
+}
+
 fn main() -> Result<()> {
-    let order = create_new_order()?;
+    let mut order = create_new_order()?;
     println!("created: {:#?}", order);
 
     let mut storage = InMemoryStorage::new();
     storage.save(order.clone())?;
+    let _ = order.commit_changes();
     println!("saved");
 
     let copy = storage.load(&order.id())?;
@@ -185,7 +217,7 @@ fn create_new_order() -> Result<Order> {
     // Following causes: Already exists ... error
     // aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
 
-    assert_eq!(1, aggregate.item_count());
-    println!("events:\n{:#?}", aggregate.commit_changes());
+    //assert_eq!(1, aggregate.item_count());
+    //println!("events:\n{:#?}", aggregate.commit_changes());
     Ok(aggregate)
 }

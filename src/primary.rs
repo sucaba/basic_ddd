@@ -189,8 +189,19 @@ where
 {
     type EventType = DbPrimaryEvent<T>;
 
+    fn new_incomplete() -> Self {
+        Self {
+            inner: None,
+            changes: Vec::new(),
+        }
+    }
+
     fn apply(&mut self, event: Self::EventType) {
-        todo!()
+        match event {
+            Created(x) => self.inner = Some(x),
+            Updated(x) => self.inner = Some(x),
+            Deleted(_) => self.inner = None,
+        }
     }
 
     fn stream_to<S>(&mut self, stream: &mut S)

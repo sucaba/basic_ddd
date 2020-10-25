@@ -148,6 +148,8 @@ pub(crate) enum EventMergeResult {
 pub trait Streamable {
     type EventType;
 
+    fn new_incomplete() -> Self;
+
     fn apply(&mut self, event: Self::EventType);
 
     fn stream_to<S>(&mut self, stream: &mut S)
