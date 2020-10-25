@@ -1,13 +1,16 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::rc::Rc;
+use tcache::typeset::SingletonSet;
 
 use basic_ddd::{
-    DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, Owned, OwnedCollection, Primary, Result,
+    DbOwnedEvent, DbPrimaryEvent, Error, Id, Identifiable, Owned, OwnedCollection, Primary, Result,
     StreamEvents, Streamable,
 };
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Eq, PartialEq, Clone)]
 struct Order
 where
     Self: Streamable,
@@ -18,21 +21,29 @@ where
     changes: Vec<<Self as Streamable>::EventType>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 enum OrderEvent {
     Primary(<Primary<OrderPrimary> as Streamable>::EventType),
     Item(<OwnedCollection<Rc<OrderItem>> as Streamable>::EventType),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 struct OrderPrimary {
     id: i32,
     item_count: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 struct OrderItem {
     id: i32,
+}
+
+impl Identifiable for Order {
+    type IdType = <OrderPrimary as Identifiable>::IdType;
+
+    fn id(&self) -> Id<Order> {
+        self.primary.get().id().convert()
+    }
 }
 
 impl Streamable for Order {
@@ -110,9 +121,50 @@ impl Identifiable for OrderItem {
     }
 }
 
+struct InMemoryStorage {
+    per_type: SingletonSet,
+}
+
+impl InMemoryStorage {
+    pub fn new() -> Self {
+        Self {
+            per_type: SingletonSet::new(),
+        }
+    }
+
+    pub fn load<T: 'static + Streamable + Clone + Identifiable>(&mut self, id: &Id<T>) -> Result<T>
+    where
+        Id<T>: Hash,
+    {
+        let map: &mut HashMap<Id<T>, T> = self.per_type.ensure(Default::default);
+        map.get(id)
+            .cloned()
+            .ok_or_else(|| Error::from_text("does not exist".into()))
+    }
+
+    pub fn save<T: 'static + Identifiable>(&mut self, root: T) -> Result<()>
+    where
+        Id<T>: Hash,
+    {
+        let map: &mut HashMap<Id<T>, T> = self.per_type.ensure(Default::default);
+        map.insert(root.id(), root);
+        Ok(())
+    }
+}
+
 fn main() -> Result<()> {
     let order = create_new_order()?;
-    println!("{:#?}", order);
+    println!("created: {:#?}", order);
+
+    let mut storage = InMemoryStorage::new();
+    storage.save(order.clone())?;
+    println!("saved");
+
+    let copy = storage.load(&order.id())?;
+
+    println!("loaded");
+    pretty_assertions::assert_eq!(order, copy);
+
     Ok(())
 }
 

@@ -93,6 +93,23 @@ where
 {
 }
 
+impl<T> Clone for DbOwnedEvent<T>
+where
+    T: Clone + GetId,
+    T::IdentifiableType: Owned,
+    Id<T::IdentifiableType>: Clone,
+    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Created(x) => Created(x.clone()),
+            Updated(x) => Updated(x.clone()),
+            Deleted(x) => Deleted(x.clone()),
+            AllDeleted(x) => AllDeleted(x.clone()),
+        }
+    }
+}
+
 pub struct OwnedCollection<T>
 where
     T: GetId,
@@ -100,6 +117,23 @@ where
 {
     inner: Vec<T>,
     changes: Vec<DbOwnedEvent<T>>,
+}
+
+impl<T> Eq for OwnedCollection<T>
+where
+    T: GetId + Eq,
+    T::IdentifiableType: Owned,
+{
+}
+
+impl<T> PartialEq for OwnedCollection<T>
+where
+    T: GetId + PartialEq,
+    T::IdentifiableType: Owned,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.eq(&other.inner) && self.changes.eq(&other.changes)
+    }
 }
 
 impl<T: GetId + Debug> Debug for OwnedCollection<T>
@@ -150,6 +184,20 @@ where
 {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<T> Clone for OwnedCollection<T>
+where
+    T: GetId + Clone,
+    T::IdentifiableType: Owned,
+    DbOwnedEvent<T>: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            changes: self.changes.clone(),
+        }
     }
 }
 

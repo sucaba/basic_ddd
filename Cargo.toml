@@ -10,3 +10,5 @@ edition = "2018"
 
 [dev-dependencies]
 pretty_assertions = "0.6.1"
+tcache = { git = "https://github.com/sucaba/tcache" }
+

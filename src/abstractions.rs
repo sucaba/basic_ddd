@@ -80,6 +80,13 @@ impl<T: Identifiable> Id<T> {
     pub fn id(&self) -> &T::IdType {
         &self.id
     }
+
+    pub fn convert<U>(self) -> Id<U>
+    where
+        U: Identifiable<IdType = T::IdType>,
+    {
+        Id::new(self.id)
+    }
 }
 
 impl<T: Identifiable> Copy for Id<T>

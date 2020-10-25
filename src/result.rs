@@ -24,7 +24,7 @@ impl Error {
         Error { inner }
     }
 
-    fn from_text(text: String) -> Self {
+    pub fn from_text(text: String) -> Self {
         Self::new(InnerError::ByMessage(text))
     }
 }

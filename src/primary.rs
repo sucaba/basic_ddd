@@ -39,6 +39,20 @@ where
     }
 }
 
+impl<T> Clone for DbPrimaryEvent<T>
+where
+    T: Clone + GetId,
+    Id<T::IdentifiableType>: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Created(x) => Created(x.clone()),
+            Updated(x) => Updated(x.clone()),
+            Deleted(x) => Deleted(x.clone()),
+        }
+    }
+}
+
 impl<T> Eq for DbPrimaryEvent<T> where T: GetId + Eq {}
 
 impl<T> PartialEq for DbPrimaryEvent<T>
@@ -61,12 +75,33 @@ pub struct Primary<T: GetId> {
     changes: Vec<DbPrimaryEvent<T>>,
 }
 
-impl<T: GetId + Debug> Default for Primary<T> {
+impl<T: GetId> Default for Primary<T> {
     fn default() -> Self {
         Self {
             inner: None,
             changes: Vec::new(),
         }
+    }
+}
+
+impl<T> Clone for Primary<T>
+where
+    T: GetId + Clone,
+    DbPrimaryEvent<T>: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            changes: self.changes.clone(),
+        }
+    }
+}
+
+impl<T: GetId + Eq> Eq for Primary<T> {}
+
+impl<T: GetId + PartialEq> PartialEq for Primary<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.eq(&other.inner) && self.changes.eq(&other.changes)
     }
 }
 
