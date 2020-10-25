@@ -49,6 +49,13 @@ impl Identifiable for Order {
 impl Streamable for Order {
     type EventType = OrderEvent;
 
+    fn apply(&mut self, event: Self::EventType) {
+        match event {
+            OrderEvent::Primary(e) => self.primary.apply(e),
+            OrderEvent::Item(e) => self.items.apply(e),
+        }
+    }
+
     fn stream_to<S>(&mut self, stream: &mut S)
     where
         S: StreamEvents<Self::EventType>,

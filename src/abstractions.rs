@@ -148,6 +148,8 @@ pub(crate) enum EventMergeResult {
 pub trait Streamable {
     type EventType;
 
+    fn apply(&mut self, event: Self::EventType);
+
     fn stream_to<S>(&mut self, stream: &mut S)
     where
         S: StreamEvents<Self::EventType>;
@@ -163,10 +165,6 @@ pub trait StreamEvents<TEvent>: Sized {
     fn stream<I>(&mut self, events: I)
     where
         I: IntoIterator<Item = TEvent>;
-
-    fn stream_one(&mut self, event: TEvent) {
-        self.stream(std::iter::once(event));
-    }
 
     fn flush<S, U>(&mut self, s: &mut S)
     where

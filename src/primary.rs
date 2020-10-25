@@ -189,6 +189,10 @@ where
 {
     type EventType = DbPrimaryEvent<T>;
 
+    fn apply(&mut self, event: Self::EventType) {
+        todo!()
+    }
+
     fn stream_to<S>(&mut self, stream: &mut S)
     where
         S: StreamEvents<Self::EventType>,
