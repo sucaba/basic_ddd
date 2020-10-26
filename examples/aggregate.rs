@@ -146,7 +146,8 @@ where
 impl<T, TEvent> InMemoryStorage<T, TEvent>
 where
     T: Streamable<EventType = TEvent> + Identifiable,
-    TEvent: std::fmt::Debug,
+    TEvent: std::fmt::Debug + Clone,
+    Id<T>: Hash,
 {
     pub fn new() -> Self {
         Self {
@@ -155,38 +156,13 @@ where
         }
     }
 
-    pub fn load(&mut self, _id: &Id<T>) -> Result<T>
-    where
-        Id<T>: Hash,
-        TEvent: Clone,
-    {
-        let mut result = T::new_incomplete();
-        for e in &self.events {
-            println!("applying {:#?}", e);
-            result.apply(e.clone());
-        }
-        Ok(result)
+    pub fn load(&mut self, _id: &Id<T>) -> Result<T> {
+        T::load(self.events.iter().cloned())
     }
 
-    pub fn save(&mut self, mut root: T) -> Result<()>
-    where
-        Id<T>: Hash,
-    {
-        root.stream_to(self);
-        println!("events after save={:#?}", self.events);
+    pub fn save(&mut self, mut root: T) -> Result<()> {
+        root.stream_to(&mut self.events);
         Ok(())
-    }
-}
-
-impl<T, TEvent> StreamEvents<TEvent> for InMemoryStorage<T, TEvent>
-where
-    T: Streamable<EventType = TEvent> + Identifiable,
-{
-    fn stream<I>(&mut self, events: I)
-    where
-        I: IntoIterator<Item = TEvent>,
-    {
-        self.events.stream(events);
     }
 }
 
@@ -196,12 +172,12 @@ fn main() -> Result<()> {
 
     let mut storage = InMemoryStorage::new();
     storage.save(order.clone())?;
-    let _ = order.commit_changes();
     println!("saved");
 
     let copy = storage.load(&order.id())?;
 
     println!("loaded");
+    let _ = order.commit_changes();
     pretty_assertions::assert_eq!(order, copy);
 
     Ok(())

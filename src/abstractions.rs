@@ -161,6 +161,20 @@ pub trait Streamable {
         self.stream_to(&mut result);
         result
     }
+
+    fn load<I>(events: I) -> crate::result::Result<Self>
+    where
+        I: IntoIterator<Item = Self::EventType>,
+        Self: Identifiable,
+        Id<Self>: Hash,
+        Self::EventType: Clone,
+    {
+        let mut result = Self::new_incomplete();
+        for e in events {
+            result.apply(e.clone());
+        }
+        Ok(result)
+    }
 }
 
 pub trait StreamEvents<TEvent>: Sized {
