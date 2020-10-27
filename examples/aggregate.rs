@@ -135,11 +135,48 @@ impl Identifiable for OrderItem {
     }
 }
 
+struct EventEnvelope<T, TEvent>
+where
+    T: Streamable<EventType = TEvent> + Identifiable,
+    Id<T>: Clone,
+    TEvent: Clone,
+{
+    pub id: Id<T>,
+    pub event: TEvent,
+}
+
+impl<T, TEvent> EventEnvelope<T, TEvent>
+where
+    T: Streamable<EventType = TEvent> + Identifiable,
+    Id<T>: Clone,
+    TEvent: Clone,
+{
+    fn new(id: Id<T>, event: TEvent) -> Self {
+        Self { id, event }
+    }
+}
+
+impl<T, TEvent> Clone for EventEnvelope<T, TEvent>
+where
+    T: Streamable<EventType = TEvent> + Identifiable,
+    Id<T>: Clone,
+    TEvent: Clone,
+{
+    fn clone(&self) -> Self {
+        EventEnvelope {
+            id: Clone::clone(&self.id),
+            event: Clone::clone(&self.event),
+        }
+    }
+}
+
 struct InMemoryStorage<T, TEvent>
 where
     T: Streamable<EventType = TEvent> + Identifiable,
+    Id<T>: Clone,
+    TEvent: Clone,
 {
-    events: Vec<TEvent>,
+    events: Vec<EventEnvelope<T, TEvent>>,
     marker: PhantomData<T>,
 }
 
@@ -147,7 +184,7 @@ impl<T, TEvent> InMemoryStorage<T, TEvent>
 where
     T: Streamable<EventType = TEvent> + Identifiable,
     TEvent: std::fmt::Debug + Clone,
-    Id<T>: Hash,
+    Id<T>: Hash + Clone,
 {
     pub fn new() -> Self {
         Self {
@@ -156,36 +193,57 @@ where
         }
     }
 
-    pub fn load(&mut self, _id: &Id<T>) -> Result<T> {
-        T::load(self.events.iter().cloned())
+    fn select_events<'a>(&'a self, id: &'a Id<T>) -> impl 'a + Iterator<Item = TEvent> {
+        self.events
+            .iter()
+            .filter(move |x| &x.id == id)
+            .map(|x| x.event.clone())
+    }
+
+    pub fn load(&mut self, id: &Id<T>) -> Result<T> {
+        let events = self.select_events(id);
+        T::load(events)
     }
 
     pub fn save(&mut self, mut root: T) -> Result<()> {
-        root.stream_to(&mut self.events);
+        let id = root.id();
+        let mut events = Vec::new();
+        root.stream_to(&mut events);
+        self.events.extend(
+            events
+                .into_iter()
+                .map(|e| EventEnvelope::new(id.clone(), e)),
+        );
         Ok(())
     }
 }
 
 fn main() -> Result<()> {
-    let mut order = create_new_order()?;
-    println!("created: {:#?}", order);
-
     let mut storage = InMemoryStorage::new();
-    storage.save(order.clone())?;
+
+    let order0 = create_new_order(0)?;
+    storage.save(order0)?;
+    let order1 = create_new_order(1)?;
+    storage.save(order1)?;
+
+    let mut order42 = create_new_order(42)?;
+    println!("created: {:#?}", order42);
+
+    storage.save(order42.clone())?;
     println!("saved");
 
-    let copy = storage.load(&order.id())?;
+    let copy = storage.load(&order42.id())?;
 
     println!("loaded");
-    let _ = order.commit_changes();
-    pretty_assertions::assert_eq!(order, copy);
+    let _ = order42.commit_changes();
+    pretty_assertions::assert_eq!(order42, copy);
 
     Ok(())
 }
 
-fn create_new_order() -> Result<Order> {
+fn create_new_order(id: i32) -> Result<Order> {
     let mut aggregate = Order::new(OrderPrimary {
-        id: 42,
+        id,
         item_count: 777, // ignored
     });
     aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
