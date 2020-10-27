@@ -145,7 +145,7 @@ pub(crate) enum EventMergeResult {
     Annihilated,
 }
 
-pub trait Streamable {
+pub trait Streamable: Sized {
     type EventType;
 
     fn new_incomplete() -> Self;
@@ -165,8 +165,6 @@ pub trait Streamable {
     fn load<I>(events: I) -> crate::result::Result<Self>
     where
         I: IntoIterator<Item = Self::EventType>,
-        Self: Identifiable,
-        Id<Self>: Hash,
         Self::EventType: Clone,
     {
         let mut result = Self::new_incomplete();
