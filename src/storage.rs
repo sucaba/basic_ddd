@@ -1,7 +1,6 @@
 use crate::abstractions::{Id, Identifiable, Streamable};
 use crate::result::Result;
 use std::hash::Hash;
-use std::marker::PhantomData;
 
 struct EventEnvelope<T, TEvent>
 where
@@ -45,7 +44,6 @@ where
     TEvent: Clone,
 {
     events: Vec<EventEnvelope<T, TEvent>>,
-    marker: PhantomData<T>,
 }
 
 impl<T, TEvent> InMemoryStorage<T, TEvent>
@@ -55,10 +53,7 @@ where
     Id<T>: Hash + Clone,
 {
     pub fn new() -> Self {
-        Self {
-            events: Vec::new(),
-            marker: PhantomData,
-        }
+        Self { events: Vec::new() }
     }
 
     fn select_events<'a>(&'a self, id: &'a Id<T>) -> impl 'a + Iterator<Item = TEvent> {
