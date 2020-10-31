@@ -3,8 +3,8 @@
 use std::rc::Rc;
 
 use basic_ddd::{
-    DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, InMemoryStorage, Owned, OwnedCollection,
-    Primary, Result, StreamEvents, Streamable,
+    Id, Identifiable, InMemoryStorage, Owned, OwnedCollection, Primary, Result, StreamEvents,
+    Streamable,
 };
 
 #[derive(Default, Debug, Eq, PartialEq, Clone)]
@@ -21,7 +21,10 @@ where
 #[derive(Debug, Eq, PartialEq, Clone)]
 enum OrderEvent {
     Primary(<Primary<OrderPrimary> as Streamable>::EventType),
-    Item(<OwnedCollection<Rc<OrderItem>> as Streamable>::EventType),
+    Item(
+        Id<OrderPrimary>,
+        <OwnedCollection<Rc<OrderItem>> as Streamable>::EventType,
+    ),
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
@@ -57,7 +60,7 @@ impl Streamable for Order {
     fn apply(&mut self, event: Self::EventType) {
         match event {
             OrderEvent::Primary(e) => self.primary.apply(e),
-            OrderEvent::Item(e) => self.items.apply(e),
+            OrderEvent::Item(_id, e) => self.items.apply(e),
         }
     }
 
@@ -65,20 +68,13 @@ impl Streamable for Order {
     where
         S: StreamEvents<Self::EventType>,
     {
-        stream.flush(&mut self.primary);
-        stream.flush(&mut self.items)
-    }
-}
-
-impl From<DbPrimaryEvent<OrderPrimary>> for OrderEvent {
-    fn from(src: DbPrimaryEvent<OrderPrimary>) -> Self {
-        OrderEvent::Primary(src)
-    }
-}
-
-impl From<DbOwnedEvent<Rc<OrderItem>>> for OrderEvent {
-    fn from(src: DbOwnedEvent<Rc<OrderItem>>) -> Self {
-        OrderEvent::Item(src)
+        let id = self.id().convert();
+        stream.flush(&mut self.primary, |primary_event| {
+            OrderEvent::Primary(primary_event)
+        });
+        stream.flush(&mut self.items, |item_event| {
+            OrderEvent::Item(id, item_event)
+        })
     }
 }
 

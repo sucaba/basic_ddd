@@ -180,12 +180,12 @@ pub trait StreamEvents<TEvent>: Sized {
     where
         I: IntoIterator<Item = TEvent>;
 
-    fn flush<S, U>(&mut self, s: &mut S)
+    fn flush<S, U, F>(&mut self, s: &mut S, f: F)
     where
         S: Streamable<EventType = U>,
-        TEvent: From<U>,
+        F: Fn(U) -> TEvent,
     {
-        s.stream_to(&mut StreamAdapter::new(self))
+        s.stream_to(&mut StreamAdapter::new(self, f))
     }
 }
 
@@ -210,30 +210,24 @@ impl<TEvent> StreamEvents<TEvent> for Vec<TEvent> {
     }
 }
 
-pub struct StreamAdapter<'a, SE, S>(&'a mut S, std::marker::PhantomData<SE>)
-where
-    S: StreamEvents<SE>;
+pub struct StreamAdapter<TInner, F>(TInner, F);
 
-impl<'a, SE, S> StreamAdapter<'a, SE, S>
-where
-    S: StreamEvents<SE>,
-{
-    pub fn new(original: &'a mut S) -> Self {
-        Self(original, std::marker::PhantomData)
+impl<TInner, F> StreamAdapter<TInner, F> {
+    pub fn new(original: TInner, f: F) -> Self {
+        Self(original, f)
     }
 }
 
-impl<'a, SE, S, E> StreamEvents<E> for StreamAdapter<'a, SE, S>
+impl<TInnerEvent, TEvent, TInner, F> StreamEvents<TEvent> for StreamAdapter<TInner, F>
 where
-    S: StreamEvents<SE>,
-    SE: From<E>,
+    TInner: StreamEvents<TInnerEvent>,
+    F: Fn(TEvent) -> TInnerEvent,
 {
     fn stream<I>(&mut self, events: I)
     where
-        I: IntoIterator<Item = E>,
+        I: IntoIterator<Item = TEvent>,
     {
-        let f = |e| Into::into(e);
-        self.0.stream(events.into_iter().map(f))
+        self.0.stream(events.into_iter().map(&self.1))
     }
 }
 
