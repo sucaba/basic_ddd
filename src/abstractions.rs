@@ -210,22 +210,6 @@ impl<TEvent> StreamEvents<TEvent> for Vec<TEvent> {
     }
 }
 
-pub trait AdaptStream<SE>
-where
-    Self: Sized + StreamEvents<SE>,
-{
-    fn adapt<'a>(&'a mut self) -> StreamAdapter<'a, SE, Self>;
-}
-
-impl<SE, S> AdaptStream<SE> for S
-where
-    S: StreamEvents<SE>,
-{
-    fn adapt<'a>(&'a mut self) -> StreamAdapter<'a, SE, Self> {
-        StreamAdapter::new(self)
-    }
-}
-
 pub struct StreamAdapter<'a, SE, S>(&'a mut S, std::marker::PhantomData<SE>)
 where
     S: StreamEvents<SE>;
@@ -248,7 +232,8 @@ where
     where
         I: IntoIterator<Item = E>,
     {
-        self.0.stream(events.into_iter().map(|e| e.into()))
+        let f = |e| Into::into(e);
+        self.0.stream(events.into_iter().map(f))
     }
 }
 
