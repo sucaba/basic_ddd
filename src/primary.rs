@@ -73,6 +73,7 @@ where
 pub struct Primary<T: GetId> {
     inner: Option<T>,
     changes: Vec<DbPrimaryEvent<T>>,
+    complete: bool,
 }
 
 impl<T: GetId> Default for Primary<T> {
@@ -80,6 +81,7 @@ impl<T: GetId> Default for Primary<T> {
         Self {
             inner: None,
             changes: Vec::new(),
+            complete: true,
         }
     }
 }
@@ -93,6 +95,7 @@ where
         Self {
             inner: self.inner.clone(),
             changes: self.changes.clone(),
+            complete: self.complete,
         }
     }
 }
@@ -127,6 +130,7 @@ where
         Self {
             inner: Some(row.clone()),
             changes: vec![Created(row)],
+            complete: true,
         }
     }
 
@@ -152,19 +156,22 @@ where
         F: FnOnce(T) -> T,
         T: Clone,
     {
-        if let Some(existing) = self.inner.take() {
-            let modified = f(existing);
-            self.inner = Some(modified.clone());
-            self.changes.push(Updated(modified));
+        if let Some(existing) = &self.inner {
+            let modified = f(existing.clone());
+            self.apply(Updated(modified));
             Ok(())
         } else {
             Err(NotFound(()))
         }
     }
 
-    pub fn delete(&mut self) -> UpdateResult<(), T> {
-        if let Some(existing) = self.inner.take() {
-            self.changes.push(Deleted(existing.get_id()));
+    pub fn delete(&mut self) -> UpdateResult<(), T>
+    where
+        T: Clone,
+    {
+        if let Some(existing) = &self.inner {
+            let existing = existing.clone();
+            self.apply(Deleted(existing.get_id()));
             Ok(existing)
         } else {
             Err(NotFound(()))
@@ -185,7 +192,7 @@ where
 
 impl<T> Streamable for Primary<T>
 where
-    T: GetId,
+    T: GetId + Clone,
 {
     type EventType = DbPrimaryEvent<T>;
 
@@ -193,14 +200,23 @@ where
         Self {
             inner: None,
             changes: Vec::new(),
+            complete: false,
         }
     }
 
+    fn mark_complete(&mut self) {
+        self.complete = true;
+    }
+
     fn apply(&mut self, event: Self::EventType) {
-        match event {
-            Created(x) => self.inner = Some(x),
-            Updated(x) => self.inner = Some(x),
+        match &event {
+            Created(x) => self.inner = Some(x.clone()),
+            Updated(x) => self.inner = Some(x.clone()),
             Deleted(_) => self.inner = None,
+        }
+
+        if self.complete {
+            self.changes.push(event);
         }
     }
 

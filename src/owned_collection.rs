@@ -11,7 +11,7 @@ where
     T::IdentifiableType: Owned,
 {
     Created(T),
-    Updated(T),
+    Updated(usize, T),
     Deleted(Id<<T as GetId>::IdentifiableType>),
     AllDeleted(Id<<T::IdentifiableType as Owned>::OwnerType>),
 }
@@ -25,7 +25,7 @@ where
     fn get_id(&self) -> Option<Id<T::IdentifiableType>> {
         match self {
             Created(x) => Some(x.get_id()),
-            Updated(x) => Some(x.get_id()),
+            Updated(_, x) => Some(x.get_id()),
             Deleted(id) => Some(id.clone()),
             AllDeleted(_) => None,
         }
@@ -35,16 +35,16 @@ where
         use EventMergeResult::*;
 
         match (self as &_, new) {
-            (Created(_), Updated(now)) => {
+            (Created(_), Updated(_, now)) => {
                 *self = Created(now);
                 Combined
             }
-            (Updated(_), Updated(now)) => {
-                *self = Updated(now);
+            (Updated(_, _), Updated(pos, now)) => {
+                *self = Updated(pos, now);
                 Combined
             }
             (Created(_), Deleted(_)) => Annihilated,
-            (Updated(_), Deleted(id)) => {
+            (Updated(_, _), Deleted(id)) => {
                 *self = Deleted(id);
                 Combined
             }
@@ -63,7 +63,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Created(x) => write!(f, "DbOwnedEvent::Created({:?})", x),
-            Updated(x) => write!(f, "DbOwnedEvent::Updated({:?})", x),
+            Updated(pos, x) => write!(f, "DbOwnedEvent::Updated({:?}, {:?})", pos, x),
             Deleted(x) => write!(f, "DbOwnedEvent::Deleted({:?})", x),
             AllDeleted(x) => write!(f, "DbOwnedEvent::AllDeleted({:?})", x),
         }
@@ -78,7 +78,7 @@ where
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Created(x), Created(y)) => x == y,
-            (Updated(x), Updated(y)) => x == y,
+            (Updated(pos1, x), Updated(pos2, y)) => pos1 == pos2 && x == y,
             (Deleted(x), Deleted(y)) => x == y,
             (AllDeleted(x), AllDeleted(y)) => x == y,
             _ => false,
@@ -103,7 +103,7 @@ where
     fn clone(&self) -> Self {
         match self {
             Created(x) => Created(x.clone()),
-            Updated(x) => Updated(x.clone()),
+            Updated(pos, x) => Updated(pos.clone(), x.clone()),
             Deleted(x) => Deleted(x.clone()),
             AllDeleted(x) => AllDeleted(x.clone()),
         }
@@ -117,6 +117,7 @@ where
 {
     inner: Vec<T>,
     changes: Vec<DbOwnedEvent<T>>,
+    complete: bool,
 }
 
 impl<T> Eq for OwnedCollection<T>
@@ -179,8 +180,9 @@ where
 
 impl<T> Default for OwnedCollection<T>
 where
-    T: GetId,
+    T: GetId + Clone,
     T::IdentifiableType: Owned,
+    Id<T::IdentifiableType>: Hash + Clone,
 {
     fn default() -> Self {
         Self::new()
@@ -197,6 +199,7 @@ where
         Self {
             inner: self.inner.clone(),
             changes: self.changes.clone(),
+            complete: self.complete,
         }
     }
 }
@@ -205,6 +208,7 @@ impl<T> Extend<T> for OwnedCollection<T>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
+    Id<T::IdentifiableType>: Hash + Clone,
 {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for item in iter.into_iter() {
@@ -215,23 +219,29 @@ where
 
 impl<T> Streamable for OwnedCollection<T>
 where
-    T: GetId,
+    T: GetId + Clone,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: Hash + Clone,
 {
     type EventType = DbOwnedEvent<T>;
 
     fn new_incomplete() -> Self {
-        Self::new()
+        Self {
+            inner: Vec::new(),
+            changes: Vec::new(),
+            complete: false,
+        }
+    }
+
+    fn mark_complete(&mut self) {
+        self.complete = true;
     }
 
     fn apply(&mut self, event: Self::EventType) {
-        match event {
-            Created(x) => self.inner.push(x),
-            Updated(x) => {
-                if let Some(i) = self.position_by_id(&x.get_id()) {
-                    self.inner[i] = x;
-                }
+        match &event {
+            Created(x) => self.inner.push(x.clone()),
+            Updated(pos, x) => {
+                self.inner[*pos] = x.clone();
             }
             Deleted(id) => {
                 if let Some(i) = self.position_by_id(&id) {
@@ -239,6 +249,10 @@ where
                 }
             }
             AllDeleted(_) => self.inner.clear(),
+        }
+
+        if self.complete {
+            self.changes.push(event);
         }
     }
 
@@ -253,13 +267,15 @@ where
 
 impl<T> OwnedCollection<T>
 where
-    T: GetId,
+    T: GetId + Clone,
     T::IdentifiableType: Owned,
+    Id<T::IdentifiableType>: Hash + Clone,
 {
     pub fn new() -> Self {
         Self {
             inner: Vec::new(),
             changes: Vec::new(),
+            complete: true,
         }
     }
 
@@ -271,23 +287,16 @@ where
         self.inner.len()
     }
 
-    pub fn update_or_add(&mut self, item: T)
-    where
-        T: Clone,
-    {
+    pub fn update_or_add(&mut self, item: T) {
         let _ = self.update(item).or_else(|NotFound(x)| self.add_new(x));
     }
 
     /**
      * Updates existing item or returns item back as a Result::Err
      */
-    pub fn update(&mut self, item: T) -> UpdateResult<T>
-    where
-        T: Clone,
-    {
+    pub fn update(&mut self, item: T) -> UpdateResult<T> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
-            self.inner[pos] = item.clone();
-            self.changes.push(Updated(item));
+            self.apply(Updated(pos, item));
             Ok(())
         } else {
             Err(NotFound(item))
@@ -298,13 +307,9 @@ where
      * Inserts a new item and returns `Ok(())` if item with the same id does not exist.
      * Returns `Err(item)` if item with the same already exists.
      */
-    pub fn add_new(&mut self, item: T) -> CreationResult<T>
-    where
-        T: Clone,
-    {
+    pub fn add_new(&mut self, item: T) -> CreationResult<T> {
         if let None = self.position_by_id(&item.get_id()) {
-            self.inner.push(item.clone());
-            self.changes.push(Created(item));
+            self.apply(Created(item));
             Ok(())
         } else {
             Err(AlreadyExists(item))
@@ -316,17 +321,13 @@ where
     }
 
     pub fn remove_all(&mut self, owner_id: Id<<T::IdentifiableType as Owned>::OwnerType>) {
-        self.inner.clear();
-        self.changes.push(AllDeleted(owner_id));
+        self.apply(AllDeleted(owner_id));
     }
 
     pub fn remove_by_id<'a>(
         &mut self,
         id: &'a Id<T::IdentifiableType>,
-    ) -> Result<(), NotFound<&'a Id<T::IdentifiableType>>>
-    where
-        Id<T::IdentifiableType>: Clone,
-    {
+    ) -> Result<(), NotFound<&'a Id<T::IdentifiableType>>> {
         if let Some(i) = self.position_by_id(id) {
             self.inner.remove(i);
             self.changes.push(Deleted(id.clone()));
@@ -336,10 +337,7 @@ where
         }
     }
 
-    fn optimize(events: Vec<DbOwnedEvent<T>>) -> Vec<DbOwnedEvent<T>>
-    where
-        Id<T::IdentifiableType>: Hash + Clone,
-    {
+    fn optimize(events: Vec<DbOwnedEvent<T>>) -> Vec<DbOwnedEvent<T>> {
         use std::collections::hash_map::Entry::*;
         use std::collections::HashMap;
         use EventMergeResult::Annihilated;
@@ -431,6 +429,7 @@ mod owned_collection_tests {
 
     const ANY_NOT_USED_ENTRY_ID: usize = 10000;
     const EXISTING_ID: usize = 0;
+    const EXISTING_POS: usize = 1;
 
     fn colored(seed: usize, c: Color) -> Rc<TestEntry> {
         TestEntry {
@@ -443,8 +442,8 @@ mod owned_collection_tests {
 
     fn setup_saved() -> OwnedCollection<Rc<TestEntry>> {
         let mut sut = OwnedCollection::new();
-        sut.update_or_add(colored(EXISTING_ID, None));
         sut.update_or_add(colored(ANY_NOT_USED_ENTRY_ID, None));
+        sut.update_or_add(colored(EXISTING_ID, None));
         sut.assume_changes_saved();
         sut
     }
@@ -474,7 +473,7 @@ mod owned_collection_tests {
 
         assert_eq!(
             sut.commit_changes(),
-            vec![Updated(colored(EXISTING_ID, Red))]
+            vec![Updated(EXISTING_POS, colored(EXISTING_ID, Red))]
         );
     }
 

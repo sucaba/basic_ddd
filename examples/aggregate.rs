@@ -57,6 +57,11 @@ impl Streamable for Order {
         }
     }
 
+    fn mark_complete(&mut self) {
+        self.primary.mark_complete();
+        self.items.mark_complete();
+    }
+
     fn apply(&mut self, event: Self::EventType) {
         match event {
             OrderEvent::Primary(e) => self.primary.apply(e),
@@ -68,13 +73,10 @@ impl Streamable for Order {
     where
         S: StreamEvents<Self::EventType>,
     {
+        stream.flush(&mut self.primary, OrderEvent::Primary);
+
         let id = self.id().convert();
-        stream.flush(&mut self.primary, |primary_event| {
-            OrderEvent::Primary(primary_event)
-        });
-        stream.flush(&mut self.items, |item_event| {
-            OrderEvent::Item(id, item_event)
-        })
+        stream.flush(&mut self.items, |e| OrderEvent::Item(id, e))
     }
 }
 

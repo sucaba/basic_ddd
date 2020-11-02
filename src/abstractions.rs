@@ -150,6 +150,8 @@ pub trait Streamable: Sized {
 
     fn new_incomplete() -> Self;
 
+    fn mark_complete(&mut self);
+
     fn apply(&mut self, event: Self::EventType);
 
     fn stream_to<S>(&mut self, stream: &mut S)
@@ -169,8 +171,11 @@ pub trait Streamable: Sized {
     {
         let mut result = Self::new_incomplete();
         for e in events {
-            result.apply(e.clone());
+            result.apply(e);
         }
+
+        result.mark_complete();
+
         Ok(result)
     }
 }
