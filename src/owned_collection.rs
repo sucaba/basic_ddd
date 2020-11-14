@@ -1,8 +1,11 @@
 use super::abstractions::*;
-use crate::result::{AlreadyExists, CreationResult, NotFound, UpdateResult};
+use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
-use std::fmt::Debug;
-use std::hash::Hash;
+use std::fmt;
+use std::hash;
+use std::ops;
+use std::result::Result as StdResult;
+use std::slice;
 use DbOwnedEvent::*;
 
 pub enum DbOwnedEvent<T>
@@ -22,7 +25,7 @@ where
     T: GetId,
     T::IdentifiableType: Owned,
 {
-    fn get_id(&self) -> Option<Id<T::IdentifiableType>> {
+    pub fn get_id(&self) -> Option<Id<T::IdentifiableType>> {
         match self {
             Created(x) => Some(x.get_id()),
             Updated(_, x) => Some(x.get_id()),
@@ -31,7 +34,7 @@ where
         }
     }
 
-    fn merge(&mut self, new: Self) -> EventMergeResult {
+    pub fn merge(&mut self, new: Self) -> EventMergeResult {
         use EventMergeResult::*;
 
         match (self as &_, new) {
@@ -53,14 +56,14 @@ where
     }
 }
 
-impl<T> std::fmt::Debug for DbOwnedEvent<T>
+impl<T> fmt::Debug for DbOwnedEvent<T>
 where
-    T: Debug + GetId,
+    T: fmt::Debug + GetId,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Debug,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: Debug,
+    Id<T::IdentifiableType>: fmt::Debug,
+    Id<<T::IdentifiableType as Owned>::OwnerType>: fmt::Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Created(x) => write!(f, "DbOwnedEvent::Created({:?})", x),
             Updated(pos, x) => write!(f, "DbOwnedEvent::Updated({:?}, {:?})", pos, x),
@@ -116,7 +119,6 @@ where
     T::IdentifiableType: Owned,
 {
     inner: Vec<T>,
-    changes: Vec<DbOwnedEvent<T>>,
     complete: bool,
 }
 
@@ -133,28 +135,26 @@ where
     T::IdentifiableType: Owned,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.inner.eq(&other.inner) && self.changes.eq(&other.changes)
+        self.inner.eq(&other.inner)
     }
 }
 
-impl<T: GetId + Debug> Debug for OwnedCollection<T>
+impl<T: GetId + fmt::Debug> fmt::Debug for OwnedCollection<T>
 where
-    T: GetId + Debug,
+    T: GetId + fmt::Debug,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Debug,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: Debug,
+    Id<T::IdentifiableType>: fmt::Debug,
+    Id<<T::IdentifiableType as Owned>::OwnerType>: fmt::Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        Debug::fmt(&self.inner, f)?;
-        f.write_str("\nchanges:\n")?;
-        Debug::fmt(&self.changes, f)
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&self.inner, f)
     }
 }
 
-impl<T, I> std::ops::Index<I> for OwnedCollection<T>
+impl<T, I> ops::Index<I> for OwnedCollection<T>
 where
-    I: std::slice::SliceIndex<[T]>,
-    T: GetId + Debug,
+    I: slice::SliceIndex<[T]>,
+    T: GetId + fmt::Debug,
     T::IdentifiableType: Owned,
 {
     type Output = I::Output;
@@ -171,7 +171,7 @@ where
     T::IdentifiableType: Owned,
 {
     type Item = &'a T;
-    type IntoIter = std::slice::Iter<'a, T>;
+    type IntoIter = slice::Iter<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.iter()
@@ -182,7 +182,7 @@ impl<T> Default for OwnedCollection<T>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Hash + Clone,
+    Id<T::IdentifiableType>: hash::Hash + Clone,
 {
     fn default() -> Self {
         Self::new()
@@ -198,37 +198,40 @@ where
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            changes: self.changes.clone(),
             complete: self.complete,
         }
     }
 }
 
-impl<T> Extend<T> for OwnedCollection<T>
-where
-    T: GetId + Clone,
-    T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Hash + Clone,
-{
-    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        for item in iter.into_iter() {
-            self.update_or_add(item);
-        }
-    }
-}
+/// Extend trait cannot be implemented because \
+/// we cannot return Changes out of extend method:
+///
+/// impl<T> Extend<T> for OwnedCollection<T>
+/// where
+///     T: GetId + Clone,
+///     T::IdentifiableType: Owned,
+///     Id<T::IdentifiableType>: hash::Hash + Clone,
+/// {
+///     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) -> Changes<<Self as Streamable>::EventType> {
+///         iter.into_iter()
+///             .map(|item| self.update_or_add(item))
+///             .flatten()
+///             .collect()
+///     }
+/// }
+///
 
 impl<T> Streamable for OwnedCollection<T>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Hash + Clone,
+    Id<T::IdentifiableType>: hash::Hash + Clone,
 {
     type EventType = DbOwnedEvent<T>;
 
     fn new_incomplete() -> Self {
         Self {
             inner: Vec::new(),
-            changes: Vec::new(),
             complete: false,
         }
     }
@@ -250,18 +253,13 @@ where
             }
             AllDeleted(_) => self.inner.clear(),
         }
-
-        if self.complete {
-            self.changes.push(event);
-        }
     }
 
-    fn stream_to<S>(&mut self, stream: &mut S)
+    fn stream_to<S>(&mut self, _stream: &mut S)
     where
         S: StreamEvents<Self::EventType>,
     {
-        let optimized = Self::optimize(std::mem::take(&mut self.changes));
-        stream.stream(optimized);
+        todo!("remove")
     }
 }
 
@@ -269,17 +267,16 @@ impl<T> OwnedCollection<T>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Hash + Clone,
+    Id<T::IdentifiableType>: hash::Hash + Clone,
 {
     pub fn new() -> Self {
         Self {
             inner: Vec::new(),
-            changes: Vec::new(),
             complete: true,
         }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+    pub fn iter(&self) -> slice::Iter<'_, T> {
         self.inner.iter()
     }
 
@@ -287,17 +284,25 @@ where
         self.inner.len()
     }
 
-    pub fn update_or_add(&mut self, item: T) {
-        let _ = self.update(item).or_else(|NotFound(x)| self.add_new(x));
+    pub fn update_or_add(&mut self, item: T) -> Changes<<Self as Streamable>::EventType>
+    where
+        T: fmt::Debug,
+    {
+        self.update(item)
+            .or_else(|NotFound(x)| self.add_new(x))
+            .unwrap()
     }
 
     /**
      * Updates existing item or returns item back as a Result::Err
      */
-    pub fn update(&mut self, item: T) -> UpdateResult<T> {
+    pub fn update(
+        &mut self,
+        item: T,
+    ) -> StdResult<Changes<<Self as Streamable>::EventType>, NotFound<T>> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
-            self.apply(Updated(pos, item));
-            Ok(())
+            self.apply(Updated(pos, item.clone()));
+            Ok(changes(Updated(pos, item)))
         } else {
             Err(NotFound(item))
         }
@@ -307,10 +312,13 @@ where
      * Inserts a new item and returns `Ok(())` if item with the same id does not exist.
      * Returns `Err(item)` if item with the same already exists.
      */
-    pub fn add_new(&mut self, item: T) -> CreationResult<T> {
+    pub fn add_new(
+        &mut self,
+        item: T,
+    ) -> StdResult<Changes<<Self as Streamable>::EventType>, AlreadyExists<T>> {
         if let None = self.position_by_id(&item.get_id()) {
-            self.apply(Created(item));
-            Ok(())
+            self.apply(Created(item.clone()));
+            Ok(changes(Created(item)))
         } else {
             Err(AlreadyExists(item))
         }
@@ -320,48 +328,28 @@ where
         self.inner.iter().position(|x| &x.get_id() == id)
     }
 
-    pub fn remove_all(&mut self, owner_id: Id<<T::IdentifiableType as Owned>::OwnerType>) {
-        self.apply(AllDeleted(owner_id));
+    pub fn remove_all(
+        &mut self,
+        owner_id: Id<<T::IdentifiableType as Owned>::OwnerType>,
+    ) -> Changes<<Self as Streamable>::EventType>
+    where
+        Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
+    {
+        self.apply(AllDeleted(owner_id.clone()));
+        changes(AllDeleted(owner_id))
     }
 
     pub fn remove_by_id<'a>(
         &mut self,
         id: &'a Id<T::IdentifiableType>,
-    ) -> Result<(), NotFound<&'a Id<T::IdentifiableType>>> {
-        if let Some(i) = self.position_by_id(id) {
-            self.inner.remove(i);
-            self.changes.push(Deleted(id.clone()));
-            Ok(())
+    ) -> StdResult<Changes<<Self as Streamable>::EventType>, NotFound<&'a Id<T::IdentifiableType>>>
+    {
+        if let Some(_) = self.position_by_id(id) {
+            self.apply(Deleted(id.clone()));
+            Ok(changes(Deleted(id.clone())))
         } else {
             Err(NotFound(id))
         }
-    }
-
-    fn optimize(events: Vec<DbOwnedEvent<T>>) -> Vec<DbOwnedEvent<T>> {
-        use std::collections::hash_map::Entry::*;
-        use std::collections::HashMap;
-        use EventMergeResult::Annihilated;
-
-        let mut event_per_id = HashMap::new();
-
-        for e in events {
-            if let Some(id) = e.get_id() {
-                match event_per_id.entry(id) {
-                    Vacant(v) => {
-                        v.insert(e);
-                    }
-                    Occupied(mut o) => {
-                        if let Annihilated = o.get_mut().merge(e) {
-                            o.remove();
-                        }
-                    }
-                }
-            } else {
-                return vec![e];
-            }
-        }
-
-        event_per_id.into_iter().map(|(_, v)| v).collect()
     }
 }
 
@@ -369,7 +357,6 @@ where
 mod owned_collection_tests {
 
     use super::*;
-    use crate::test_utils::*;
     use pretty_assertions::assert_eq;
     use std::cmp::{Eq, PartialEq};
     use std::rc::Rc;
@@ -440,155 +427,63 @@ mod owned_collection_tests {
         .into()
     }
 
-    fn setup_saved() -> OwnedCollection<Rc<TestEntry>> {
+    fn setup() -> OwnedCollection<Rc<TestEntry>> {
         let mut sut = OwnedCollection::new();
         sut.update_or_add(colored(ANY_NOT_USED_ENTRY_ID, None));
         sut.update_or_add(colored(EXISTING_ID, None));
-        sut.assume_changes_saved();
         sut
-    }
-
-    fn setup_new() -> OwnedCollection<Rc<TestEntry>> {
-        OwnedCollection::new()
     }
 
     #[test]
     fn creation_event_is_streamed() {
-        let mut sut = setup_saved();
+        let mut sut = setup();
 
-        sut.update_or_add(colored(1, Red));
-        sut.update_or_add(colored(2, Red));
+        let mut changes = Changes::new();
+
+        changes.extend(sut.update_or_add(colored(1, Red)));
+        changes.extend(sut.update_or_add(colored(2, Red)));
 
         assert_eq!(
-            sorted(sut.commit_changes()),
+            sorted(changes.into()),
             vec![Created(colored(1, Red)), Created(colored(2, Red))]
         );
     }
 
     #[test]
     fn update_event_is_streamed() {
-        let mut sut = setup_saved();
+        let mut sut = setup();
 
-        sut.update_or_add(colored(EXISTING_ID, Red));
+        let changes: Vec<_> = sut.update_or_add(colored(EXISTING_ID, Red)).into();
 
         assert_eq!(
-            sut.commit_changes(),
+            changes,
             vec![Updated(EXISTING_POS, colored(EXISTING_ID, Red))]
         );
     }
 
     #[test]
     fn delete_event_is_streamed() {
-        let mut sut = setup_saved();
+        let mut sut = setup();
 
-        let removed = sut
-            .remove_by_id(&colored(EXISTING_ID, Red).get_id())
-            .is_ok();
+        let id = colored(EXISTING_ID, Red).get_id();
+        let removed = sut.remove_by_id(&id);
 
-        assert!(removed);
+        assert!(matches!(removed, Ok(_)));
 
-        assert_eq!(
-            sut.commit_changes(),
-            vec![Deleted(colored(EXISTING_ID, Red).get_id())]
-        );
+        let changes: Vec<_> = removed.unwrap().into();
+
+        assert_eq!(changes, vec![Deleted(colored(EXISTING_ID, Red).get_id())]);
     }
 
     #[test]
     fn delete_all_event_is_streamed() {
-        let mut sut = setup_saved();
+        let mut sut = setup();
 
         let owner_id = (TestOwner { id: 1 }).get_id();
 
-        sut.remove_all(owner_id);
+        let changes: Vec<_> = sut.remove_all(owner_id).into();
 
-        assert_eq!(sut.commit_changes(), vec![AllDeleted(owner_id)]);
-    }
-
-    #[test]
-    fn should_optimize_create_update_of_single_entry() {
-        let mut sut = setup_new();
-
-        sut.update_or_add(colored(1, Red));
-        sut.update_or_add(colored(1, Blue));
-
-        assert_eq!(sut.commit_changes(), vec![Created(colored(1, Blue))]);
-    }
-
-    #[test]
-    fn should_optimize_create_update_of_multiple_entries() {
-        let mut sut = setup_new();
-
-        sut.update_or_add(colored(1, Red));
-        sut.update_or_add(colored(1, Blue));
-
-        sut.update_or_add(colored(2, Red));
-        sut.update_or_add(colored(2, Blue));
-
-        assert_eq!(
-            sorted(sut.commit_changes()),
-            vec![Created(colored(1, Blue)), Created(colored(2, Blue)),]
-        );
-    }
-
-    #[test]
-    fn should_optimize_update_delete() {
-        let mut sut = setup_saved();
-
-        sut.update_or_add(colored(EXISTING_ID, Red));
-
-        let id = colored(EXISTING_ID, Red).get_id();
-        sut.remove_by_id(&id).unwrap();
-
-        assert_eq!(sorted(sut.commit_changes()), vec![Deleted(id)]);
-    }
-
-    #[test]
-    fn should_optimize_create_delete_by_annihilation() {
-        let mut sut = setup_new();
-
-        sut.update_or_add(colored(1, Red));
-        sut.remove_by_id(&colored(1, Blue).get_id()).unwrap();
-
-        assert_eq!(sorted(sut.commit_changes()), vec![]);
-    }
-
-    #[test]
-    fn should_optimize_muttiple_create_delete_on_the_same_entry_by_annihilation() {
-        let mut sut = setup_new();
-
-        for _ in 0..3 {
-            sut.update_or_add(colored(1, Red));
-            sut.remove_by_id(&colored(1, Blue).get_id()).unwrap();
-        }
-
-        assert_eq!(sorted(sut.commit_changes()), vec![]);
-    }
-
-    #[test]
-    fn should_optimize_create_delete_by_annihilation_independently_of_other_entries() {
-        let mut sut = setup_new();
-
-        sut.update_or_add(colored(1, Red));
-        sut.remove_by_id(&colored(1, Blue).get_id()).unwrap();
-
-        sut.update_or_add(colored(2, Red));
-
-        assert_eq!(sorted(sut.commit_changes()), vec![Created(colored(2, Red))]);
-    }
-
-    #[test]
-    fn should_optimize_multiple_create_delete_by_annihilation_independently_of_other_entries() {
-        let mut sut = setup_new();
-
-        sut.update_or_add(colored(1, Red));
-        sut.remove_by_id(&colored(1, Blue).get_id()).unwrap();
-
-        sut.update_or_add(colored(2, Red));
-        sut.remove_by_id(&colored(2, Blue).get_id()).unwrap();
-
-        sut.update_or_add(colored(3, Red));
-
-        assert_eq!(sorted(sut.commit_changes()), vec![Created(colored(3, Red))]);
+        assert_eq!(changes, vec![AllDeleted(owner_id)]);
     }
 
     fn sorted<T>(mut events: Vec<DbOwnedEvent<T>>) -> Vec<DbOwnedEvent<T>>

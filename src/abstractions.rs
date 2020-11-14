@@ -5,6 +5,62 @@ use std::rc::Rc;
 
 //pub type Result<T> = std::result::Result<T, Error>;
 
+pub fn changes<TEvent>(event: TEvent) -> Changes<TEvent> {
+    std::iter::once(event).collect()
+}
+
+pub struct Changes<TEvent> {
+    inner: Vec<TEvent>,
+}
+
+impl<TEvent> Debug for Changes<TEvent>
+where
+    TEvent: Debug,
+{
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.debug_list().entries(&self.inner).finish()
+    }
+}
+
+impl<TEvent> Changes<TEvent> {
+    pub fn new() -> Self {
+        Self { inner: Vec::new() }
+    }
+
+    pub fn changes_to(self, output: &mut Vec<TEvent>) {
+        output.extend(self.inner)
+    }
+}
+
+impl<TEvent> Extend<TEvent> for Changes<TEvent> {
+    fn extend<T: IntoIterator<Item = TEvent>>(&mut self, iter: T) {
+        self.inner.extend(iter)
+    }
+}
+
+impl<TEvent> Into<Vec<TEvent>> for Changes<TEvent> {
+    fn into(self) -> Vec<TEvent> {
+        self.into_iter().collect()
+    }
+}
+
+impl<T> std::iter::FromIterator<T> for Changes<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self {
+            inner: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl<T> std::iter::IntoIterator for Changes<T> {
+    type Item = T;
+    type IntoIter = <Vec<T> as std::iter::IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
 pub trait Identifiable: Sized {
     type IdType: Eq;
 
@@ -140,7 +196,7 @@ impl<T: Identifiable> PartialEq for Id<T> {
     }
 }
 
-pub(crate) enum EventMergeResult {
+pub enum EventMergeResult {
     Combined,
     Annihilated,
 }

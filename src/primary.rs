@@ -1,7 +1,8 @@
 use super::abstractions::*;
-use crate::result::{NotFound, UpdateResult};
+use crate::result::NotFound;
 use std::cmp::{Eq, PartialEq};
-use std::fmt::Debug;
+use std::fmt;
+use std::result::Result as StdResult;
 use DbPrimaryEvent::*;
 
 pub enum DbPrimaryEvent<T>
@@ -13,24 +14,12 @@ where
     Deleted(Id<T::IdentifiableType>),
 }
 
-impl<T: GetId> DbPrimaryEvent<T> {
-    fn merge(self, other: Self) -> Option<Self> {
-        match (self, other) {
-            (Created(_), Updated(m)) => Some(Created(m)),
-            (Created(_), Deleted(_)) => None,
-            (Updated(_), Updated(x)) => Some(Updated(x)),
-            (Updated(_), Deleted(id)) => Some(Deleted(id)),
-            _ => todo!("unsupported events to merge"),
-        }
-    }
-}
-
-impl<T> std::fmt::Debug for DbPrimaryEvent<T>
+impl<T> fmt::Debug for DbPrimaryEvent<T>
 where
-    T: Debug + GetId,
-    Id<T::IdentifiableType>: Debug,
+    T: fmt::Debug + GetId,
+    Id<T::IdentifiableType>: fmt::Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Created(x) => write!(f, "DbPrimaryEvent::Created({:?})", x),
             Updated(x) => write!(f, "DbPrimaryEvent::Updated({:?})", x),
@@ -72,7 +61,6 @@ where
 
 pub struct Primary<T: GetId> {
     inner: Option<T>,
-    changes: Vec<DbPrimaryEvent<T>>,
     complete: bool,
 }
 
@@ -80,7 +68,6 @@ impl<T: GetId> Default for Primary<T> {
     fn default() -> Self {
         Self {
             inner: None,
-            changes: Vec::new(),
             complete: true,
         }
     }
@@ -94,7 +81,6 @@ where
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            changes: self.changes.clone(),
             complete: self.complete,
         }
     }
@@ -104,18 +90,17 @@ impl<T: GetId + Eq> Eq for Primary<T> {}
 
 impl<T: GetId + PartialEq> PartialEq for Primary<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.inner.eq(&other.inner) && self.changes.eq(&other.changes)
+        self.inner.eq(&other.inner)
     }
 }
 
-impl<T> std::fmt::Debug for Primary<T>
+impl<T> fmt::Debug for Primary<T>
 where
-    T: GetId + Debug,
-    Vec<DbPrimaryEvent<T>>: Debug,
+    T: GetId + fmt::Debug,
+    Vec<DbPrimaryEvent<T>>: fmt::Debug,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.inner.fmt(f)?;
-        self.changes.fmt(f)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
     }
 }
 
@@ -129,7 +114,6 @@ where
     {
         Self {
             inner: Some(row.clone()),
-            changes: vec![Created(row)],
             complete: true,
         }
     }
@@ -138,54 +122,47 @@ where
         self.inner.as_ref().expect("not deleted")
     }
 
-    pub fn set(&mut self, row: T) -> UpdateResult<T>
+    pub fn try_get(&self) -> Option<&T> {
+        self.inner.as_ref()
+    }
+
+    pub fn set(&mut self, row: T) -> StdResult<Changes<DbPrimaryEvent<T>>, NotFound<T>>
     where
         T: Clone,
     {
         if self.inner.is_some() {
             self.inner = Some(row.clone());
-            self.changes.push(Updated(row));
-            Ok(())
+            self.apply(Updated(row.clone()));
+            Ok(changes(Updated(row)))
         } else {
             Err(NotFound(row))
         }
     }
 
-    pub fn update<F>(&mut self, f: F) -> UpdateResult<()>
+    pub fn update<F>(&mut self, f: F) -> StdResult<Changes<DbPrimaryEvent<T>>, NotFound<()>>
     where
         F: FnOnce(T) -> T,
         T: Clone,
     {
         if let Some(existing) = &self.inner {
             let modified = f(existing.clone());
-            self.apply(Updated(modified));
-            Ok(())
+            self.apply(Updated(modified.clone()));
+            Ok(changes(Updated(modified)))
         } else {
             Err(NotFound(()))
         }
     }
 
-    pub fn delete(&mut self) -> UpdateResult<(), T>
+    pub fn delete(&mut self) -> StdResult<Changes<DbPrimaryEvent<T>>, NotFound<()>>
     where
         T: Clone,
     {
         if let Some(existing) = &self.inner {
             let existing = existing.clone();
             self.apply(Deleted(existing.get_id()));
-            Ok(existing)
+            Ok(changes(Deleted(existing.get_id())))
         } else {
             Err(NotFound(()))
-        }
-    }
-
-    fn optimize(events: Vec<DbPrimaryEvent<T>>) -> Vec<DbPrimaryEvent<T>> {
-        let mut iter = events.into_iter();
-        if let Some(first) = iter.next() {
-            iter.try_fold(first, DbPrimaryEvent::merge)
-                .into_iter()
-                .collect()
-        } else {
-            vec![]
         }
     }
 }
@@ -199,7 +176,6 @@ where
     fn new_incomplete() -> Self {
         Self {
             inner: None,
-            changes: Vec::new(),
             complete: false,
         }
     }
@@ -214,25 +190,19 @@ where
             Updated(x) => self.inner = Some(x.clone()),
             Deleted(_) => self.inner = None,
         }
-
-        if self.complete {
-            self.changes.push(event);
-        }
     }
 
-    fn stream_to<S>(&mut self, stream: &mut S)
+    fn stream_to<S>(&mut self, _stream: &mut S)
     where
         S: StreamEvents<Self::EventType>,
     {
-        let optimized = Self::optimize(std::mem::take(&mut self.changes));
-        stream.stream(optimized);
+        todo!("remove")
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::*;
     use pretty_assertions::assert_eq;
 
     #[derive(Debug, Clone, Eq, PartialEq)]
@@ -251,145 +221,73 @@ mod tests {
 
     const ID: i32 = 42;
 
-    fn setup_new() -> Primary<MyEntity> {
+    fn setup() -> Primary<MyEntity> {
         Primary::new(MyEntity {
             id: ID,
             name: "foo".into(),
         })
     }
 
-    fn setup_saved() -> Primary<MyEntity> {
-        let mut result = setup_new();
-        result.assume_changes_saved();
-        result
-    }
-
     #[test]
-    fn should_combine_create_update_into_create() {
-        let mut sut = setup_new();
+    fn should_set() {
+        let mut sut = setup();
 
-        sut.update(|mut x| {
-            x.name = "bar".into();
-            x
-        })
-        .unwrap();
-
-        assert_eq!(
-            sut.commit_changes(),
-            vec![Created(MyEntity {
-                id: 42,
+        let changes: Vec<_> = sut
+            .set(MyEntity {
+                id: ID,
                 name: "bar".into(),
+            })
+            .unwrap()
+            .into();
+
+        assert_eq!(sut.get().name.as_str(), "bar");
+        assert_eq!(
+            changes,
+            vec![Updated(MyEntity {
+                id: ID,
+                name: "bar".into()
             })]
         );
     }
 
     #[test]
-    fn should_annihilate_create_delete_changes() {
-        let mut sut = setup_new();
+    fn should_update() {
+        let mut sut = setup();
 
-        sut.delete().unwrap();
-
-        assert_eq!(sut.commit_changes(), vec![]);
-    }
-
-    #[test]
-    fn should_combine_reduce_create_followed_by_update() {
-        let mut sut = setup_new();
-
-        for _ in 0..3 {
-            sut.update(|mut x| {
-                x.name = "ignored".into();
+        let changes: Vec<_> = sut
+            .update(|mut x| {
+                x.name = "bar".into();
                 x
             })
-            .unwrap();
-        }
+            .unwrap()
+            .into();
 
-        sut.update(|mut x| {
-            x.name = "bar".into();
-            x
-        })
-        .unwrap();
-
+        assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
-            sut.commit_changes(),
-            vec![Created(MyEntity {
-                id: 42,
-                name: "bar".into(),
-            })]
-        );
-    }
-
-    #[test]
-    fn should_combine_update_update() {
-        let mut sut = setup_saved();
-
-        sut.update(|mut x| {
-            x.name = "ignored".into();
-            x
-        })
-        .unwrap();
-        sut.update(|mut x| {
-            x.name = "bar".into();
-            x
-        })
-        .unwrap();
-
-        assert_eq!(
-            sut.commit_changes(),
+            changes,
             vec![Updated(MyEntity {
-                id: 42,
-                name: "bar".into(),
+                id: ID,
+                name: "bar".into()
             })]
         );
     }
 
     #[test]
-    fn should_combine_update_delete() {
-        let mut sut = setup_saved();
+    fn should_delete() {
+        let mut sut = setup();
 
-        sut.update(|mut x| {
-            x.name = "ignored".into();
-            x
-        })
-        .unwrap();
-        sut.delete().unwrap();
+        let changes: Vec<_> = sut.delete().unwrap().into();
 
+        assert_eq!(sut.try_get(), None);
         assert_eq!(
-            sut.commit_changes(),
+            changes,
             vec![Deleted(
-                MyEntity {
-                    id: 42,
-                    name: "bar".into(),
-                }
-                .id()
+                (MyEntity {
+                    id: ID,
+                    name: "foo".into()
+                })
+                .get_id()
             )]
-        );
-    }
-
-    #[test]
-    fn should_combine_multiple_updates() {
-        let mut sut = setup_saved();
-
-        for _ in 0..3 {
-            sut.update(|mut x| {
-                x.name = "ignored".into();
-                x
-            })
-            .unwrap();
-        }
-
-        sut.update(|mut x| {
-            x.name = "bar".into();
-            x
-        })
-        .unwrap();
-
-        assert_eq!(
-            sut.commit_changes(),
-            vec![Updated(MyEntity {
-                id: 42,
-                name: "bar".into(),
-            })]
         );
     }
 }

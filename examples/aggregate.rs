@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
@@ -16,6 +17,7 @@ where
     items: OwnedCollection<Rc<OrderItem>>,
 
     changes: Vec<<Self as Streamable>::EventType>,
+    completed: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -38,6 +40,66 @@ struct OrderItem {
     id: i32,
 }
 
+impl Order {
+    fn new(mut primary: OrderPrimary) -> Self {
+        primary.item_count = 0;
+
+        Self {
+            primary: Primary::new(primary.into()),
+            items: Default::default(),
+            changes: Default::default(),
+            completed: true,
+        }
+    }
+
+    fn item_count(&self) -> usize {
+        self.primary.get().item_count
+    }
+
+    /*
+     * Add item by preserving inner invariant:
+     * `item_count` should always match `items.len()`
+     */
+    fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
+        let mut events: Vec<OrderEvent> = self
+            .items
+            .add_new(item)?
+            .into_iter()
+            .map(|e| self.from_item_event(e))
+            .collect();
+
+        let events2: Vec<OrderEvent> = self
+            .primary
+            .update(|mut p| {
+                p.item_count += 1;
+                p
+            })?
+            .into_iter()
+            .map(|e| self.from_primary_event(e))
+            .collect();
+
+        events.extend(events2);
+
+        self.changes.extend(events);
+        Ok(())
+    }
+
+    fn from_item_event(
+        &self,
+        event: <OwnedCollection<Rc<OrderItem>> as Streamable>::EventType,
+    ) -> OrderEvent {
+        let id = self.id().convert();
+        OrderEvent::Item(id, event)
+    }
+
+    fn from_primary_event(
+        &self,
+        event: <Primary<OrderPrimary> as Streamable>::EventType,
+    ) -> OrderEvent {
+        OrderEvent::Primary(event)
+    }
+}
+
 impl Identifiable for Order {
     type IdType = <OrderPrimary as Identifiable>::IdType;
 
@@ -54,15 +116,22 @@ impl Streamable for Order {
             primary: Primary::new_incomplete(),
             items: OwnedCollection::new_incomplete(),
             changes: Vec::new(),
+            completed: false,
         }
     }
 
     fn mark_complete(&mut self) {
-        self.primary.mark_complete();
-        self.items.mark_complete();
+        self.completed = true;
     }
 
-    fn apply(&mut self, event: Self::EventType) {
+    fn apply(&mut self, event: Self::EventType)
+    where
+        Self::EventType: Clone,
+    {
+        if self.completed {
+            self.changes.push(event.clone());
+        }
+
         match event {
             OrderEvent::Primary(e) => self.primary.apply(e),
             OrderEvent::Item(_id, e) => self.items.apply(e),
@@ -73,41 +142,8 @@ impl Streamable for Order {
     where
         S: StreamEvents<Self::EventType>,
     {
-        stream.flush(&mut self.primary, OrderEvent::Primary);
-
-        let id = self.id().convert();
-        stream.flush(&mut self.items, |e| OrderEvent::Item(id, e))
-    }
-}
-
-impl Order {
-    fn new(mut primary: OrderPrimary) -> Self {
-        primary.item_count = 0;
-
-        Self {
-            primary: Primary::new(primary.into()),
-            items: Default::default(),
-            changes: Default::default(),
-        }
-    }
-
-    fn item_count(&self) -> usize {
-        self.primary.get().item_count
-    }
-
-    /*
-     * Add item by preserving inner invariant:
-     * `item_count` should always match `items.len()`
-     */
-    fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
-        self.items.add_new(item)?;
-        self.primary
-            .update(|mut p| {
-                p.item_count += 1;
-                p
-            })
-            .unwrap();
-        Ok(())
+        let changes = mem::take(&mut self.changes);
+        stream.stream(changes);
     }
 }
 
@@ -140,17 +176,15 @@ fn main() -> Result<()> {
     storage.save(order1)?;
 
     let mut order42 = create_new_order(42)?;
-    println!("created: {:#?}", order42);
 
     storage.save(order42.clone())?;
-    println!("saved");
 
     let copy = storage.load(&order42.id())?;
 
-    println!("loaded");
     let _ = order42.commit_changes();
     pretty_assertions::assert_eq!(order42, copy);
 
+    println!("success!");
     Ok(())
 }
 
@@ -161,10 +195,5 @@ fn create_new_order(id: i32) -> Result<Order> {
     });
     aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
 
-    // Following causes: Already exists ... error
-    // aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
-
-    //assert_eq!(1, aggregate.item_count());
-    //println!("events:\n{:#?}", aggregate.commit_changes());
     Ok(aggregate)
 }
