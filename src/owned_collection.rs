@@ -241,10 +241,10 @@ where
     }
 
     fn apply(&mut self, event: Self::EventType) {
-        match &event {
-            Created(x) => self.inner.push(x.clone()),
+        match event {
+            Created(x) => self.inner.push(x),
             Updated(pos, x) => {
-                self.inner[*pos] = x.clone();
+                self.inner[pos] = x;
             }
             Deleted(id) => {
                 if let Some(i) = self.position_by_id(&id) {

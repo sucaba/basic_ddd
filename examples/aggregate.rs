@@ -4,9 +4,13 @@ use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
-    Id, Identifiable, InMemoryStorage, Owned, OwnedCollection, Primary, Result, StreamEvents,
-    Streamable,
+    Changes, DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, InMemoryStorage, Owned,
+    OwnedCollection, Primary, Result, StreamEvents, Streamable,
 };
+
+type OrderItems = OwnedCollection<Rc<OrderItem>>;
+type OrderPrimaryEvent = DbPrimaryEvent<OrderPrimary>;
+type OrderItemEvent = DbOwnedEvent<Rc<OrderItem>>;
 
 #[derive(Default, Debug, Eq, PartialEq, Clone)]
 struct Order
@@ -16,7 +20,7 @@ where
     primary: Primary<OrderPrimary>,
     items: OwnedCollection<Rc<OrderItem>>,
 
-    changes: Vec<<Self as Streamable>::EventType>,
+    changes: Changes<Order>,
     completed: bool,
 }
 
@@ -58,45 +62,30 @@ impl Order {
 
     /*
      * Add item by preserving inner invariant:
-     * `item_count` should always match `items.len()`
+     * `item_count` should match `items.len()`
      */
     fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
-        let mut events: Vec<OrderEvent> = self
-            .items
+        self.items
             .add_new(item)?
-            .into_iter()
-            .map(|e| self.from_item_event(e))
-            .collect();
+            .ascend_to(self.item_ascension(), &mut self.changes);
 
-        let events2: Vec<OrderEvent> = self
-            .primary
+        self.primary
             .update(|mut p| {
                 p.item_count += 1;
                 p
             })?
-            .into_iter()
-            .map(|e| self.from_primary_event(e))
-            .collect();
+            .ascend_to(self.primary_ascension(), &mut self.changes);
 
-        events.extend(events2);
-
-        self.changes.extend(events);
         Ok(())
     }
 
-    fn from_item_event(
-        &self,
-        event: <OwnedCollection<Rc<OrderItem>> as Streamable>::EventType,
-    ) -> OrderEvent {
+    fn item_ascension(&self) -> impl Fn(OrderItemEvent) -> OrderEvent {
         let id = self.id().convert();
-        OrderEvent::Item(id, event)
+        move |event| OrderEvent::Item(id, event)
     }
 
-    fn from_primary_event(
-        &self,
-        event: <Primary<OrderPrimary> as Streamable>::EventType,
-    ) -> OrderEvent {
-        OrderEvent::Primary(event)
+    fn primary_ascension(&self) -> impl Fn(OrderPrimaryEvent) -> OrderEvent {
+        OrderEvent::Primary
     }
 }
 
@@ -115,7 +104,7 @@ impl Streamable for Order {
         Order {
             primary: Primary::new_incomplete(),
             items: OwnedCollection::new_incomplete(),
-            changes: Vec::new(),
+            changes: Changes::new(),
             completed: false,
         }
     }

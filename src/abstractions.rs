@@ -17,7 +17,66 @@ impl<T: Streamable> Changes<T> {
             inner: SmallList::new(),
         }
     }
+
+    pub fn to(self, dest: &mut Self) {
+        dest.extend(self)
+    }
+
+    pub fn push(&mut self, event: T::EventType) {
+        self.inner.push(event)
+    }
+
+    pub fn ascend<F, O: Streamable>(self, f: F) -> Changes<O>
+    where
+        F: Fn(T::EventType) -> O::EventType,
+    {
+        self.into_iter().map(f).collect::<Changes<O>>()
+    }
+
+    /*
+     * TODO: remove becauseimmutable `f` causes issue
+     */
+    pub fn ascend_to<O: Streamable, F>(self, f: F, dest: &mut Changes<O>)
+    where
+        F: Fn(T::EventType) -> O::EventType,
+    {
+        dest.extend(self.into_iter().map(f));
+    }
 }
+
+trait ExtendTo: IntoIterator + Sized {
+    fn extend_to<I: Extend<Self::Item>>(self, other: &mut I) {
+        other.extend(self)
+    }
+}
+
+impl<T: Streamable> Default for Changes<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: Streamable> Clone for Changes<T>
+where
+    T::EventType: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<T: Streamable> PartialEq for Changes<T>
+where
+    T::EventType: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        PartialEq::eq(&self.inner, &other.inner)
+    }
+}
+
+impl<T: Streamable> Eq for Changes<T> where T::EventType: Eq {}
 
 impl<T: Streamable> Debug for Changes<T>
 where
@@ -59,33 +118,45 @@ impl<T: Streamable> std::iter::IntoIterator for Changes<T> {
     }
 }
 
-struct SmallList<TEvent> {
-    inner: Vec<TEvent>,
+struct SmallList<T> {
+    inner: Vec<T>,
 }
 
-impl<TEvent> Debug for SmallList<TEvent>
+impl<T> Debug for SmallList<T>
 where
-    TEvent: Debug,
+    T: Debug,
 {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_list().entries(&self.inner).finish()
     }
 }
 
-impl<TEvent> SmallList<TEvent> {
+impl<T> SmallList<T> {
     pub fn new() -> Self {
         Self { inner: Vec::new() }
     }
+
+    pub fn push(&mut self, item: T) {
+        self.inner.push(item)
+    }
 }
 
-impl<TEvent> Extend<TEvent> for SmallList<TEvent> {
-    fn extend<T: IntoIterator<Item = TEvent>>(&mut self, iter: T) {
+impl<T: Clone> Clone for SmallList<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<T> Extend<T> for SmallList<T> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         self.inner.extend(iter)
     }
 }
 
-impl<TEvent> Into<Vec<TEvent>> for SmallList<TEvent> {
-    fn into(self) -> Vec<TEvent> {
+impl<T> Into<Vec<T>> for SmallList<T> {
+    fn into(self) -> Vec<T> {
         self.into_iter().collect()
     }
 }
@@ -97,6 +168,14 @@ impl<T> std::iter::FromIterator<T> for SmallList<T> {
         }
     }
 }
+
+impl<T: PartialEq> PartialEq for SmallList<T> {
+    fn eq(&self, other: &Self) -> bool {
+        return PartialEq::eq(&self.inner, &other.inner);
+    }
+}
+
+impl<T: Eq> Eq for SmallList<T> {}
 
 impl<T> std::iter::IntoIterator for SmallList<T> {
     type Item = T;
