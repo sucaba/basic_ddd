@@ -132,8 +132,7 @@ where
     {
         if self.inner.is_some() {
             self.inner = Some(row.clone());
-            self.apply(Updated(row.clone()));
-            Ok(changes(Updated(row)))
+            Ok(self.mutate(Updated(row)))
         } else {
             Err(NotFound(row))
         }
@@ -146,8 +145,7 @@ where
     {
         if let Some(mut modified) = self.inner.clone() {
             f(&mut modified);
-            self.apply(Updated(modified.clone()));
-            Ok(changes(Updated(modified)))
+            Ok(self.mutate(Updated(modified)))
         } else {
             Err(NotFound(()))
         }
@@ -158,9 +156,8 @@ where
         T: Clone,
     {
         if let Some(existing) = &self.inner {
-            let existing = existing.clone();
-            self.apply(Deleted(existing.get_id()));
-            Ok(changes(Deleted(existing.get_id())))
+            let id = existing.get_id();
+            Ok(self.mutate(Deleted(id)))
         } else {
             Err(NotFound(()))
         }
@@ -173,8 +170,8 @@ where
 {
     type EventType = DbPrimaryEvent<T>;
 
-    fn apply(&mut self, event: Self::EventType) {
-        match &event {
+    fn apply(&mut self, event: &Self::EventType) {
+        match event {
             Created(x) => self.inner = Some(x.clone()),
             Updated(x) => self.inner = Some(x.clone()),
             Deleted(_) => self.inner = None,

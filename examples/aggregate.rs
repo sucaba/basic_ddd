@@ -21,7 +21,6 @@ where
     items: OwnedCollection<Rc<OrderItem>>,
 
     changes: Changes<Order>,
-    completed: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -52,7 +51,6 @@ impl Order {
             primary: Primary::new(primary.into()),
             items: Default::default(),
             changes: Default::default(),
-            completed: true,
         }
     }
 
@@ -97,14 +95,10 @@ impl Identifiable for Order {
 impl Changable for Order {
     type EventType = OrderEvent;
 
-    fn apply(&mut self, event: Self::EventType)
+    fn apply(&mut self, event: &Self::EventType)
     where
         Self::EventType: Clone,
     {
-        if self.completed {
-            self.changes.push(event.clone());
-        }
-
         match event {
             OrderEvent::Primary(e) => self.primary.apply(e),
             OrderEvent::Item(_id, e) => self.items.apply(e),
@@ -114,16 +108,7 @@ impl Changable for Order {
 
 impl Streamable for Order {
     fn new_incomplete() -> Self {
-        Order {
-            primary: Primary::default(),
-            items: OwnedCollection::default(),
-            changes: Changes::new(),
-            completed: false,
-        }
-    }
-
-    fn mark_complete(&mut self) {
-        self.completed = true;
+        Self::default()
     }
 
     fn stream_to<S>(&mut self, stream: &mut S)

@@ -49,18 +49,18 @@ where
 impl<T, TEvent> InMemoryStorage<T, TEvent>
 where
     T: Streamable<EventType = TEvent> + Identifiable,
-    TEvent: std::fmt::Debug + Clone,
+    TEvent: 'static + std::fmt::Debug + Clone,
     Id<T>: Hash + Clone,
 {
     pub fn new() -> Self {
         Self { events: Vec::new() }
     }
 
-    fn select_events<'a>(&'a self, id: &'a Id<T>) -> impl 'a + Iterator<Item = TEvent> {
+    fn select_events<'a>(&'a self, id: &'a Id<T>) -> impl 'a + Iterator<Item = &TEvent> {
         self.events
             .iter()
             .filter(move |x| &x.id == id)
-            .map(|x| x.event.clone())
+            .map(|x| &x.event)
     }
 
     pub fn load(&mut self, id: &Id<T>) -> Result<T> {

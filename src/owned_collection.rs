@@ -229,14 +229,14 @@ where
 {
     type EventType = DbOwnedEvent<T>;
 
-    fn apply(&mut self, event: Self::EventType) {
+    fn apply(&mut self, event: &Self::EventType) {
         match event {
-            Created(x) => self.inner.push(x),
+            Created(x) => self.inner.push(x.clone()),
             Updated(pos, x) => {
-                self.inner[pos] = x;
+                self.inner[*pos] = x.clone();
             }
             Deleted(id) => {
-                if let Some(i) = self.position_by_id(&id) {
+                if let Some(i) = self.position_by_id(id) {
                     self.inner.remove(i);
                 }
             }
@@ -280,8 +280,7 @@ where
      */
     pub fn update(&mut self, item: T) -> StdResult<Changes<Self>, NotFound<T>> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
-            self.apply(Updated(pos, item.clone()));
-            Ok(changes(Updated(pos, item)))
+            Ok(self.mutate(Updated(pos, item)))
         } else {
             Err(NotFound(item))
         }
@@ -293,8 +292,7 @@ where
      */
     pub fn add_new(&mut self, item: T) -> StdResult<Changes<Self>, AlreadyExists<T>> {
         if let None = self.position_by_id(&item.get_id()) {
-            self.apply(Created(item.clone()));
-            Ok(changes(Created(item)))
+            Ok(self.mutate(Created(item)))
         } else {
             Err(AlreadyExists(item))
         }
@@ -311,8 +309,7 @@ where
     where
         Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
     {
-        self.apply(AllDeleted(owner_id.clone()));
-        changes(AllDeleted(owner_id))
+        self.mutate(AllDeleted(owner_id))
     }
 
     pub fn remove_by_id<'a>(
@@ -320,8 +317,7 @@ where
         id: &'a Id<T::IdentifiableType>,
     ) -> StdResult<Changes<Self>, NotFound<&'a Id<T::IdentifiableType>>> {
         if let Some(_) = self.position_by_id(id) {
-            self.apply(Deleted(id.clone()));
-            Ok(changes(Deleted(id.clone())))
+            Ok(self.mutate(Deleted(id.clone())))
         } else {
             Err(NotFound(id))
         }

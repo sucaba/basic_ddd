@@ -329,14 +329,19 @@ pub enum EventMergeResult {
 pub trait Changable {
     type EventType;
 
-    fn apply(&mut self, event: Self::EventType);
+    fn apply(&mut self, event: &Self::EventType);
+
+    #[inline]
+    fn mutate(&mut self, e: Self::EventType) -> Changes<Self>
+    where
+        Self: Sized,
+    {
+        self.apply(&e);
+        changes(e)
+    }
 }
 
-pub trait Streamable: Changable + Sized {
-    fn new_incomplete() -> Self;
-
-    fn mark_complete(&mut self);
-
+pub trait Streamable: Changable {
     fn stream_to<S>(&mut self, stream: &mut S)
     where
         S: StreamEvents<Self::EventType>;
@@ -347,17 +352,18 @@ pub trait Streamable: Changable + Sized {
         result
     }
 
-    fn load<I>(events: I) -> crate::result::Result<Self>
+    fn new_incomplete() -> Self;
+
+    fn load<'a, I>(events: I) -> crate::result::Result<Self>
     where
-        I: IntoIterator<Item = Self::EventType>,
-        Self::EventType: Clone,
+        Self: Sized,
+        I: IntoIterator<Item = &'a Self::EventType>,
+        Self::EventType: 'static + Clone,
     {
         let mut result = Self::new_incomplete();
         for e in events {
             result.apply(e);
         }
-
-        result.mark_complete();
 
         Ok(result)
     }
