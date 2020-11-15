@@ -326,13 +326,13 @@ pub enum EventMergeResult {
     Annihilated,
 }
 
-pub trait Changable: Sized {
+pub trait Changable {
     type EventType;
 
     fn apply(&mut self, event: Self::EventType);
 }
 
-pub trait Streamable: Changable {
+pub trait Streamable: Changable + Sized {
     fn new_incomplete() -> Self;
 
     fn mark_complete(&mut self);
