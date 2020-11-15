@@ -284,7 +284,7 @@ where
         self.inner.len()
     }
 
-    pub fn update_or_add(&mut self, item: T) -> Changes<<Self as Streamable>::EventType>
+    pub fn update_or_add(&mut self, item: T) -> Changes<Self>
     where
         T: fmt::Debug,
     {
@@ -296,10 +296,7 @@ where
     /**
      * Updates existing item or returns item back as a Result::Err
      */
-    pub fn update(
-        &mut self,
-        item: T,
-    ) -> StdResult<Changes<<Self as Streamable>::EventType>, NotFound<T>> {
+    pub fn update(&mut self, item: T) -> StdResult<Changes<Self>, NotFound<T>> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
             self.apply(Updated(pos, item.clone()));
             Ok(changes(Updated(pos, item)))
@@ -312,10 +309,7 @@ where
      * Inserts a new item and returns `Ok(())` if item with the same id does not exist.
      * Returns `Err(item)` if item with the same already exists.
      */
-    pub fn add_new(
-        &mut self,
-        item: T,
-    ) -> StdResult<Changes<<Self as Streamable>::EventType>, AlreadyExists<T>> {
+    pub fn add_new(&mut self, item: T) -> StdResult<Changes<Self>, AlreadyExists<T>> {
         if let None = self.position_by_id(&item.get_id()) {
             self.apply(Created(item.clone()));
             Ok(changes(Created(item)))
@@ -331,7 +325,7 @@ where
     pub fn remove_all(
         &mut self,
         owner_id: Id<<T::IdentifiableType as Owned>::OwnerType>,
-    ) -> Changes<<Self as Streamable>::EventType>
+    ) -> Changes<Self>
     where
         Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
     {
@@ -342,8 +336,7 @@ where
     pub fn remove_by_id<'a>(
         &mut self,
         id: &'a Id<T::IdentifiableType>,
-    ) -> StdResult<Changes<<Self as Streamable>::EventType>, NotFound<&'a Id<T::IdentifiableType>>>
-    {
+    ) -> StdResult<Changes<Self>, NotFound<&'a Id<T::IdentifiableType>>> {
         if let Some(_) = self.position_by_id(id) {
             self.apply(Deleted(id.clone()));
             Ok(changes(Deleted(id.clone())))
@@ -427,7 +420,9 @@ mod owned_collection_tests {
         .into()
     }
 
-    fn setup() -> OwnedCollection<Rc<TestEntry>> {
+    type Sut = OwnedCollection<Rc<TestEntry>>;
+
+    fn setup() -> Sut {
         let mut sut = OwnedCollection::new();
         sut.update_or_add(colored(ANY_NOT_USED_ENTRY_ID, None));
         sut.update_or_add(colored(EXISTING_ID, None));
@@ -438,7 +433,7 @@ mod owned_collection_tests {
     fn creation_event_is_streamed() {
         let mut sut = setup();
 
-        let mut changes = Changes::new();
+        let mut changes = Changes::<Sut>::new();
 
         changes.extend(sut.update_or_add(colored(1, Red)));
         changes.extend(sut.update_or_add(colored(2, Red)));

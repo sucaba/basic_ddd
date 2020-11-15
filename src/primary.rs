@@ -126,7 +126,7 @@ where
         self.inner.as_ref()
     }
 
-    pub fn set(&mut self, row: T) -> StdResult<Changes<DbPrimaryEvent<T>>, NotFound<T>>
+    pub fn set(&mut self, row: T) -> StdResult<Changes<Self>, NotFound<T>>
     where
         T: Clone,
     {
@@ -139,7 +139,7 @@ where
         }
     }
 
-    pub fn update<F>(&mut self, f: F) -> StdResult<Changes<DbPrimaryEvent<T>>, NotFound<()>>
+    pub fn update<F>(&mut self, f: F) -> StdResult<Changes<Self>, NotFound<()>>
     where
         F: FnOnce(T) -> T,
         T: Clone,
@@ -153,7 +153,7 @@ where
         }
     }
 
-    pub fn delete(&mut self) -> StdResult<Changes<DbPrimaryEvent<T>>, NotFound<()>>
+    pub fn delete(&mut self) -> StdResult<Changes<Self>, NotFound<()>>
     where
         T: Clone,
     {
