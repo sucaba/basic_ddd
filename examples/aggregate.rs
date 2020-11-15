@@ -70,10 +70,7 @@ impl Order {
             .ascend_to(self.item_ascension(), &mut self.changes);
 
         self.primary
-            .update(|mut p| {
-                p.item_count += 1;
-                p
-            })?
+            .update(|p| p.item_count += 1)?
             .ascend_to(self.primary_ascension(), &mut self.changes);
 
         Ok(())

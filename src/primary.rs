@@ -141,11 +141,11 @@ where
 
     pub fn update<F>(&mut self, f: F) -> StdResult<Changes<Self>, NotFound<()>>
     where
-        F: FnOnce(T) -> T,
+        F: FnOnce(&mut T),
         T: Clone,
     {
-        if let Some(existing) = &self.inner {
-            let modified = f(existing.clone());
+        if let Some(mut modified) = self.inner.clone() {
+            f(&mut modified);
             self.apply(Updated(modified.clone()));
             Ok(changes(Updated(modified)))
         } else {
@@ -236,13 +236,7 @@ mod tests {
     fn should_update() {
         let mut sut = setup();
 
-        let changes: Vec<_> = sut
-            .update(|mut x| {
-                x.name = "bar".into();
-                x
-            })
-            .unwrap()
-            .into();
+        let changes: Vec<_> = sut.update(|x| x.name = "bar".into()).unwrap().into();
 
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
