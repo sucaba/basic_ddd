@@ -221,24 +221,13 @@ where
 /// }
 ///
 
-impl<T> Streamable for OwnedCollection<T>
+impl<T> Changable for OwnedCollection<T>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
 {
     type EventType = DbOwnedEvent<T>;
-
-    fn new_incomplete() -> Self {
-        Self {
-            inner: Vec::new(),
-            complete: false,
-        }
-    }
-
-    fn mark_complete(&mut self) {
-        self.complete = true;
-    }
 
     fn apply(&mut self, event: Self::EventType) {
         match event {
@@ -253,13 +242,6 @@ where
             }
             AllDeleted(_) => self.inner.clear(),
         }
-    }
-
-    fn stream_to<S>(&mut self, _stream: &mut S)
-    where
-        S: StreamEvents<Self::EventType>,
-    {
-        todo!("remove")
     }
 }
 

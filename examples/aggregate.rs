@@ -4,7 +4,7 @@ use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
-    Changes, DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, InMemoryStorage, Owned,
+    Changable, Changes, DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, InMemoryStorage, Owned,
     OwnedCollection, Primary, Result, StreamEvents, Streamable,
 };
 
@@ -26,10 +26,10 @@ where
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 enum OrderEvent {
-    Primary(<Primary<OrderPrimary> as Streamable>::EventType),
+    Primary(<Primary<OrderPrimary> as Changable>::EventType),
     Item(
         Id<OrderPrimary>,
-        <OwnedCollection<Rc<OrderItem>> as Streamable>::EventType,
+        <OwnedCollection<Rc<OrderItem>> as Changable>::EventType,
     ),
 }
 
@@ -97,21 +97,8 @@ impl Identifiable for Order {
     }
 }
 
-impl Streamable for Order {
+impl Changable for Order {
     type EventType = OrderEvent;
-
-    fn new_incomplete() -> Self {
-        Order {
-            primary: Primary::new_incomplete(),
-            items: OwnedCollection::new_incomplete(),
-            changes: Changes::new(),
-            completed: false,
-        }
-    }
-
-    fn mark_complete(&mut self) {
-        self.completed = true;
-    }
 
     fn apply(&mut self, event: Self::EventType)
     where
@@ -125,6 +112,21 @@ impl Streamable for Order {
             OrderEvent::Primary(e) => self.primary.apply(e),
             OrderEvent::Item(_id, e) => self.items.apply(e),
         }
+    }
+}
+
+impl Streamable for Order {
+    fn new_incomplete() -> Self {
+        Order {
+            primary: Primary::default(),
+            items: OwnedCollection::default(),
+            changes: Changes::new(),
+            completed: false,
+        }
+    }
+
+    fn mark_complete(&mut self) {
+        self.completed = true;
     }
 
     fn stream_to<S>(&mut self, stream: &mut S)

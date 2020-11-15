@@ -3,15 +3,15 @@ use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-pub fn changes<T: Streamable>(event: T::EventType) -> Changes<T> {
+pub fn changes<T: Changable>(event: T::EventType) -> Changes<T> {
     std::iter::once(event).collect()
 }
 
-pub struct Changes<T: Streamable> {
-    inner: SmallList<<T as Streamable>::EventType>,
+pub struct Changes<T: Changable> {
+    inner: SmallList<<T as Changable>::EventType>,
 }
 
-impl<T: Streamable> Changes<T> {
+impl<T: Changable> Changes<T> {
     pub fn new() -> Self {
         Changes {
             inner: SmallList::new(),
@@ -26,7 +26,7 @@ impl<T: Streamable> Changes<T> {
         self.inner.push(event)
     }
 
-    pub fn ascend<F, O: Streamable>(self, f: F) -> Changes<O>
+    pub fn ascend<F, O: Changable>(self, f: F) -> Changes<O>
     where
         F: Fn(T::EventType) -> O::EventType,
     {
@@ -36,7 +36,7 @@ impl<T: Streamable> Changes<T> {
     /*
      * TODO: remove becauseimmutable `f` causes issue
      */
-    pub fn ascend_to<O: Streamable, F>(self, f: F, dest: &mut Changes<O>)
+    pub fn ascend_to<O: Changable, F>(self, f: F, dest: &mut Changes<O>)
     where
         F: Fn(T::EventType) -> O::EventType,
     {
@@ -50,13 +50,13 @@ trait ExtendTo: IntoIterator + Sized {
     }
 }
 
-impl<T: Streamable> Default for Changes<T> {
+impl<T: Changable> Default for Changes<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Streamable> Clone for Changes<T>
+impl<T: Changable> Clone for Changes<T>
 where
     T::EventType: Clone,
 {
@@ -67,7 +67,7 @@ where
     }
 }
 
-impl<T: Streamable> PartialEq for Changes<T>
+impl<T: Changable> PartialEq for Changes<T>
 where
     T::EventType: PartialEq,
 {
@@ -76,9 +76,9 @@ where
     }
 }
 
-impl<T: Streamable> Eq for Changes<T> where T::EventType: Eq {}
+impl<T: Changable> Eq for Changes<T> where T::EventType: Eq {}
 
-impl<T: Streamable> Debug for Changes<T>
+impl<T: Changable> Debug for Changes<T>
 where
     T::EventType: Debug,
 {
@@ -89,19 +89,19 @@ where
     }
 }
 
-impl<T: Streamable> Extend<T::EventType> for Changes<T> {
+impl<T: Changable> Extend<T::EventType> for Changes<T> {
     fn extend<I: IntoIterator<Item = T::EventType>>(&mut self, iter: I) {
         self.inner.extend(iter)
     }
 }
 
-impl<T: Streamable> Into<Vec<T::EventType>> for Changes<T> {
+impl<T: Changable> Into<Vec<T::EventType>> for Changes<T> {
     fn into(self) -> Vec<T::EventType> {
         self.inner.into_iter().collect()
     }
 }
 
-impl<T: Streamable> std::iter::FromIterator<T::EventType> for Changes<T> {
+impl<T: Changable> std::iter::FromIterator<T::EventType> for Changes<T> {
     fn from_iter<I: IntoIterator<Item = T::EventType>>(iter: I) -> Self {
         Self {
             inner: iter.into_iter().collect(),
@@ -109,7 +109,7 @@ impl<T: Streamable> std::iter::FromIterator<T::EventType> for Changes<T> {
     }
 }
 
-impl<T: Streamable> std::iter::IntoIterator for Changes<T> {
+impl<T: Changable> std::iter::IntoIterator for Changes<T> {
     type Item = T::EventType;
     type IntoIter = <Vec<T::EventType> as std::iter::IntoIterator>::IntoIter;
 
@@ -326,14 +326,16 @@ pub enum EventMergeResult {
     Annihilated,
 }
 
-pub trait Streamable: Sized {
+pub trait Changable: Sized {
     type EventType;
 
+    fn apply(&mut self, event: Self::EventType);
+}
+
+pub trait Streamable: Changable {
     fn new_incomplete() -> Self;
 
     fn mark_complete(&mut self);
-
-    fn apply(&mut self, event: Self::EventType);
 
     fn stream_to<S>(&mut self, stream: &mut S)
     where

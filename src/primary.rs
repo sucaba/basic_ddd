@@ -167,22 +167,11 @@ where
     }
 }
 
-impl<T> Streamable for Primary<T>
+impl<T> Changable for Primary<T>
 where
     T: GetId + Clone,
 {
     type EventType = DbPrimaryEvent<T>;
-
-    fn new_incomplete() -> Self {
-        Self {
-            inner: None,
-            complete: false,
-        }
-    }
-
-    fn mark_complete(&mut self) {
-        self.complete = true;
-    }
 
     fn apply(&mut self, event: Self::EventType) {
         match &event {
@@ -190,13 +179,6 @@ where
             Updated(x) => self.inner = Some(x.clone()),
             Deleted(_) => self.inner = None,
         }
-    }
-
-    fn stream_to<S>(&mut self, _stream: &mut S)
-    where
-        S: StreamEvents<Self::EventType>,
-    {
-        todo!("remove")
     }
 }
 
