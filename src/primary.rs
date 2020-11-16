@@ -3,9 +3,9 @@ use crate::result::NotFound;
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
 use std::result::Result as StdResult;
-use DbPrimaryEvent::*;
+use PrimaryEvent::*;
 
-pub enum DbPrimaryEvent<T>
+pub enum PrimaryEvent<T>
 where
     T: GetId,
 {
@@ -14,7 +14,7 @@ where
     Deleted(Id<T::IdentifiableType>),
 }
 
-impl<T> fmt::Debug for DbPrimaryEvent<T>
+impl<T> fmt::Debug for PrimaryEvent<T>
 where
     T: fmt::Debug + GetId,
     Id<T::IdentifiableType>: fmt::Debug,
@@ -28,7 +28,7 @@ where
     }
 }
 
-impl<T> Clone for DbPrimaryEvent<T>
+impl<T> Clone for PrimaryEvent<T>
 where
     T: Clone + GetId,
     Id<T::IdentifiableType>: Clone,
@@ -42,9 +42,9 @@ where
     }
 }
 
-impl<T> Eq for DbPrimaryEvent<T> where T: GetId + Eq {}
+impl<T> Eq for PrimaryEvent<T> where T: GetId + Eq {}
 
-impl<T> PartialEq for DbPrimaryEvent<T>
+impl<T> PartialEq for PrimaryEvent<T>
 where
     T: GetId + PartialEq,
     Id<T::IdentifiableType>: PartialEq,
@@ -76,7 +76,7 @@ impl<T: GetId> Default for Primary<T> {
 impl<T> Clone for Primary<T>
 where
     T: GetId + Clone,
-    DbPrimaryEvent<T>: Clone,
+    PrimaryEvent<T>: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -97,7 +97,7 @@ impl<T: GetId + PartialEq> PartialEq for Primary<T> {
 impl<T> fmt::Debug for Primary<T>
 where
     T: GetId + fmt::Debug,
-    Vec<DbPrimaryEvent<T>>: fmt::Debug,
+    Vec<PrimaryEvent<T>>: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
@@ -106,7 +106,7 @@ where
 
 impl<T: GetId> Primary<T>
 where
-    DbPrimaryEvent<T>: Sized,
+    PrimaryEvent<T>: Sized,
 {
     pub fn new(row: T) -> Self
     where
@@ -168,7 +168,7 @@ impl<T> Changable for Primary<T>
 where
     T: GetId + Clone,
 {
-    type EventType = DbPrimaryEvent<T>;
+    type EventType = PrimaryEvent<T>;
 
     fn apply(&mut self, event: &Self::EventType) {
         match event {

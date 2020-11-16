@@ -4,12 +4,12 @@ use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
-    Changable, Changes, DbPrimaryEvent, Id, Identifiable, InMemoryStorage, Owned, OwnedCollection,
-    OwnedEvent, Primary, Result, StreamEvents, Streamable,
+    Changable, Changes, Id, Identifiable, InMemoryStorage, Owned, OwnedCollection, OwnedEvent,
+    Primary, PrimaryEvent, Result, StreamEvents, Streamable,
 };
 
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
-type OrderPrimaryEvent = DbPrimaryEvent<OrderPrimary>;
+type OrderPrimaryEvent = PrimaryEvent<OrderPrimary>;
 type OrderItemEvent = OwnedEvent<Rc<OrderItem>>;
 
 #[derive(Default, Debug, Eq, PartialEq, Clone)]
