@@ -6,9 +6,9 @@ use std::hash;
 use std::ops;
 use std::result::Result as StdResult;
 use std::slice;
-use DbOwnedEvent::*;
+use OwnedEvent::*;
 
-pub enum DbOwnedEvent<T>
+pub enum OwnedEvent<T>
 where
     T: GetId,
     T::IdentifiableType: Owned,
@@ -19,7 +19,7 @@ where
     AllDeleted(Id<<T::IdentifiableType as Owned>::OwnerType>),
 }
 
-impl<T> DbOwnedEvent<T>
+impl<T> OwnedEvent<T>
 where
     Id<T::IdentifiableType>: Clone,
     T: GetId,
@@ -56,7 +56,7 @@ where
     }
 }
 
-impl<T> fmt::Debug for DbOwnedEvent<T>
+impl<T> fmt::Debug for OwnedEvent<T>
 where
     T: fmt::Debug + GetId,
     T::IdentifiableType: Owned,
@@ -73,7 +73,7 @@ where
     }
 }
 
-impl<T> PartialEq for DbOwnedEvent<T>
+impl<T> PartialEq for OwnedEvent<T>
 where
     T: PartialEq + GetId,
     T::IdentifiableType: Owned,
@@ -89,14 +89,14 @@ where
     }
 }
 
-impl<T> Eq for DbOwnedEvent<T>
+impl<T> Eq for OwnedEvent<T>
 where
     T: Eq + GetId,
     T::IdentifiableType: Owned,
 {
 }
 
-impl<T> Clone for DbOwnedEvent<T>
+impl<T> Clone for OwnedEvent<T>
 where
     T: Clone + GetId,
     T::IdentifiableType: Owned,
@@ -193,7 +193,7 @@ impl<T> Clone for OwnedCollection<T>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
-    DbOwnedEvent<T>: Clone,
+    OwnedEvent<T>: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -227,7 +227,7 @@ where
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
 {
-    type EventType = DbOwnedEvent<T>;
+    type EventType = OwnedEvent<T>;
 
     fn apply(&mut self, event: &Self::EventType) {
         match event {
@@ -459,13 +459,13 @@ mod owned_collection_tests {
         assert_eq!(changes, vec![AllDeleted(owner_id)]);
     }
 
-    fn sorted<T>(mut events: Vec<DbOwnedEvent<T>>) -> Vec<DbOwnedEvent<T>>
+    fn sorted<T>(mut events: Vec<OwnedEvent<T>>) -> Vec<OwnedEvent<T>>
     where
         T: GetId,
         T::IdentifiableType: Owned,
         Id<T::IdentifiableType>: Clone + Ord,
     {
-        events.sort_by_key(DbOwnedEvent::get_id);
+        events.sort_by_key(OwnedEvent::get_id);
         events
     }
 }

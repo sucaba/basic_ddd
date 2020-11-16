@@ -4,13 +4,13 @@ use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
-    Changable, Changes, DbOwnedEvent, DbPrimaryEvent, Id, Identifiable, InMemoryStorage, Owned,
-    OwnedCollection, Primary, Result, StreamEvents, Streamable,
+    Changable, Changes, DbPrimaryEvent, Id, Identifiable, InMemoryStorage, Owned, OwnedCollection,
+    OwnedEvent, Primary, Result, StreamEvents, Streamable,
 };
 
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
 type OrderPrimaryEvent = DbPrimaryEvent<OrderPrimary>;
-type OrderItemEvent = DbOwnedEvent<Rc<OrderItem>>;
+type OrderItemEvent = OwnedEvent<Rc<OrderItem>>;
 
 #[derive(Default, Debug, Eq, PartialEq, Clone)]
 struct Order
