@@ -131,7 +131,6 @@ where
         T: Clone,
     {
         if self.inner.is_some() {
-            self.inner = Some(row.clone());
             Ok(self.mutate(Updated(row)))
         } else {
             Err(NotFound(row))
