@@ -91,8 +91,7 @@ where
     pub fn save(&mut self, mut root: T) -> Result<()> {
         let id = root.id();
         let to_envelope = |e| EventEnvelope::new(id.clone(), e);
-        let mut adapter =
-            StreamAdapter::new(&mut self.events, to_envelope);
+        let mut adapter = StreamAdapter::new(&mut self.events, to_envelope);
         root.stream_to(&mut adapter);
         Ok(())
     }

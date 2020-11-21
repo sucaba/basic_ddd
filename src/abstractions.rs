@@ -344,7 +344,7 @@ pub trait Changable {
 pub trait Streamable: Changable {
     fn stream_to<S>(&mut self, stream: &mut S)
     where
-        S: StreamEvents<Self::EventType>;
+        S: Stream<Self::EventType>;
 
     fn commit_changes(&mut self) -> Vec<Self::EventType> {
         let mut result = Vec::new();
@@ -369,23 +369,15 @@ pub trait Streamable: Changable {
     }
 }
 
-pub trait StreamEvents<TEvent>: Sized {
+pub trait Stream<TEvent>: Sized {
     fn stream<I>(&mut self, events: I)
     where
         I: IntoIterator<Item = TEvent>;
-
-    fn flush<S, U, F>(&mut self, s: &mut S, f: F)
-    where
-        S: Streamable<EventType = U>,
-        F: Fn(U) -> TEvent,
-    {
-        s.stream_to(&mut StreamAdapter::new(self, f))
-    }
 }
 
-impl<S, TEvent> StreamEvents<TEvent> for &mut S
+impl<S, TEvent> Stream<TEvent> for &mut S
 where
-    S: StreamEvents<TEvent>,
+    S: Stream<TEvent>,
 {
     fn stream<I>(&mut self, events: I)
     where
@@ -395,7 +387,7 @@ where
     }
 }
 
-impl<TEvent> StreamEvents<TEvent> for Vec<TEvent> {
+impl<TEvent> Stream<TEvent> for Vec<TEvent> {
     fn stream<I>(&mut self, events: I)
     where
         I: IntoIterator<Item = TEvent>,
@@ -412,9 +404,9 @@ impl<TInner, F> StreamAdapter<TInner, F> {
     }
 }
 
-impl<TInnerEvent, TEvent, TInner, F> StreamEvents<TEvent> for StreamAdapter<TInner, F>
+impl<TInnerEvent, TEvent, TInner, F> Stream<TEvent> for StreamAdapter<TInner, F>
 where
-    TInner: StreamEvents<TInnerEvent>,
+    TInner: Stream<TInnerEvent>,
     F: Fn(TEvent) -> TInnerEvent,
 {
     fn stream<I>(&mut self, events: I)

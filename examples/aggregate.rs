@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use basic_ddd::{
     Changable, Changes, Id, Identifiable, InMemoryStorage, Owned, OwnedCollection, OwnedEvent,
-    Primary, PrimaryEvent, Result, StreamEvents, Streamable,
+    Primary, PrimaryEvent, Result, Stream, Streamable,
 };
 
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
@@ -113,7 +113,7 @@ impl Streamable for Order {
 
     fn stream_to<S>(&mut self, stream: &mut S)
     where
-        S: StreamEvents<Self::EventType>,
+        S: Stream<Self::EventType>,
     {
         let changes = mem::take(&mut self.changes);
         stream.stream(changes);
