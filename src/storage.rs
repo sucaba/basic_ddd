@@ -2,6 +2,26 @@ use crate::abstractions::{Id, Identifiable, StreamAdapter, Streamable};
 use crate::result::Result;
 use std::hash::Hash;
 
+pub trait Load<T>
+where
+    T: Streamable + Identifiable,
+{
+    fn load(&mut self, id: &Id<T>) -> Result<T>;
+}
+
+pub trait Save<T>
+where
+    T: Streamable + Identifiable,
+{
+    fn save(&mut self, root: T) -> Result<()>;
+}
+
+pub trait StoreEvents<T>: Load<T> + Save<T>
+where
+    T: Streamable + Identifiable,
+{
+}
+
 struct EventEnvelope<T, TEvent>
 where
     T: Streamable<EventType = TEvent> + Identifiable,
@@ -70,8 +90,9 @@ where
 
     pub fn save(&mut self, mut root: T) -> Result<()> {
         let id = root.id();
+        let to_envelope = |e| EventEnvelope::new(id.clone(), e);
         let mut adapter =
-            StreamAdapter::new(&mut self.events, |e| EventEnvelope::new(id.clone(), e));
+            StreamAdapter::new(&mut self.events, to_envelope);
         root.stream_to(&mut adapter);
         Ok(())
     }
