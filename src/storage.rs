@@ -1,4 +1,4 @@
-use crate::abstractions::{Id, Identifiable, Streamable};
+use crate::abstractions::{Id, Identifiable, StreamAdapter, Streamable};
 use crate::result::Result;
 use std::hash::Hash;
 
@@ -70,13 +70,9 @@ where
 
     pub fn save(&mut self, mut root: T) -> Result<()> {
         let id = root.id();
-        let mut events = Vec::new();
-        root.stream_to(&mut events);
-        self.events.extend(
-            events
-                .into_iter()
-                .map(|e| EventEnvelope::new(id.clone(), e)),
-        );
+        let mut adapter =
+            StreamAdapter::new(&mut self.events, |e| EventEnvelope::new(id.clone(), e));
+        root.stream_to(&mut adapter);
         Ok(())
     }
 }

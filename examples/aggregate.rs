@@ -143,12 +143,9 @@ impl Identifiable for OrderItem {
 fn main() -> Result<()> {
     let mut storage = InMemoryStorage::new();
 
-    let order0 = create_new_order(0)?;
-    storage.save(order0)?;
-    let order1 = create_new_order(1)?;
-    storage.save(order1)?;
-
+    storage.save(create_new_order(0)?)?;
     let mut order42 = create_new_order(42)?;
+    storage.save(create_new_order(1)?)?;
 
     storage.save(order42.clone())?;
 
