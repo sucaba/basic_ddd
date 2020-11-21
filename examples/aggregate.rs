@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use basic_ddd::{
     Changable, Changes, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection,
-    OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream, Streamable, Unstreamable,
+    OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream, Streamable,
 };
 
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
@@ -115,8 +115,6 @@ impl Streamable for Order {
         stream.stream(changes);
     }
 }
-
-impl Unstreamable for Order {}
 
 impl Identifiable for OrderPrimary {
     type IdType = i32;

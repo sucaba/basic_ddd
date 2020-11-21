@@ -353,12 +353,21 @@ pub trait Streamable: Changable {
     }
 }
 
-pub trait Unstreamable: Changable + Default {
+pub trait Unstreamable: Changable + Default + Sized {
     fn load<'a, I>(events: I) -> crate::result::Result<Self>
     where
-        Self: Sized,
         I: IntoIterator<Item = &'a Self::EventType>,
-        Self::EventType: 'static + Clone,
+        Self::EventType: 'static;
+}
+
+impl<T, TEvent> Unstreamable for T
+where
+    T: Sized + Default + Changable<EventType = TEvent>,
+{
+    fn load<'a, I>(events: I) -> crate::result::Result<Self>
+    where
+        I: IntoIterator<Item = &'a Self::EventType>,
+        Self::EventType: 'static,
     {
         let mut result = Self::default();
         for e in events {
