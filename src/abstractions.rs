@@ -346,21 +346,21 @@ pub trait Streamable: Changable {
     where
         S: Stream<Self::EventType>;
 
-    fn commit_changes(&mut self) -> Vec<Self::EventType> {
+    fn take_changes(&mut self) -> Vec<Self::EventType> {
         let mut result = Vec::new();
         self.stream_to(&mut result);
         result
     }
+}
 
-    fn new_incomplete() -> Self;
-
+pub trait Unstreamable: Changable + Default {
     fn load<'a, I>(events: I) -> crate::result::Result<Self>
     where
         Self: Sized,
         I: IntoIterator<Item = &'a Self::EventType>,
         Self::EventType: 'static + Clone,
     {
-        let mut result = Self::new_incomplete();
+        let mut result = Self::default();
         for e in events {
             result.apply(e);
         }

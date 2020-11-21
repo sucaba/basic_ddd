@@ -1,4 +1,4 @@
-use crate::abstractions::{Id, Identifiable, StreamAdapter, Streamable};
+use crate::abstractions::{Changable, Id, Identifiable, StreamAdapter, Streamable, Unstreamable};
 use crate::result::Result;
 
 pub trait Load<T>
@@ -46,7 +46,7 @@ where
 
 impl<T, TEvent> InMemoryStorage<T, TEvent>
 where
-    T: Streamable<EventType = TEvent> + Identifiable,
+    T: Changable<EventType = TEvent> + Identifiable,
     TEvent: 'static + std::fmt::Debug + Clone,
     Id<T>: Clone,
 {
@@ -64,7 +64,7 @@ where
 
 impl<T, TEvent> Load<T> for InMemoryStorage<T, TEvent>
 where
-    T: Streamable<EventType = TEvent> + Identifiable,
+    T: Unstreamable<EventType = TEvent> + Identifiable,
     TEvent: 'static + std::fmt::Debug + Clone,
     Id<T>: Clone,
 {

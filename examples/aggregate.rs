@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use basic_ddd::{
     Changable, Changes, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection,
-    OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream, Streamable,
+    OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream, Streamable, Unstreamable,
 };
 
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
@@ -107,10 +107,6 @@ impl Changable for Order {
 }
 
 impl Streamable for Order {
-    fn new_incomplete() -> Self {
-        Self::default()
-    }
-
     fn stream_to<S>(&mut self, stream: &mut S)
     where
         S: Stream<Self::EventType>,
@@ -119,6 +115,8 @@ impl Streamable for Order {
         stream.stream(changes);
     }
 }
+
+impl Unstreamable for Order {}
 
 impl Identifiable for OrderPrimary {
     type IdType = i32;
@@ -151,7 +149,7 @@ fn main() -> Result<()> {
 
     let copy = storage.load(&order42.id())?;
 
-    let _ = order42.commit_changes();
+    let _ = order42.take_changes();
     pretty_assertions::assert_eq!(order42, copy);
 
     println!("success!");

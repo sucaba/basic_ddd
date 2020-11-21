@@ -8,6 +8,6 @@ pub(crate) trait AssumeChangesSaved {
 
 impl<T: Streamable> AssumeChangesSaved for T {
     fn assume_changes_saved(&mut self) {
-        drop(self.commit_changes())
+        drop(self.take_changes())
     }
 }
