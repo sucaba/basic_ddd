@@ -1,43 +1,23 @@
 use crate::abstractions::{Id, Identifiable, StreamAdapter, Streamable};
 use crate::result::Result;
-use std::hash::Hash;
 
 pub trait Load<T>
 where
-    T: Streamable + Identifiable,
+    T: Identifiable,
 {
     fn load(&mut self, id: &Id<T>) -> Result<T>;
 }
 
-pub trait Save<T>
-where
-    T: Streamable + Identifiable,
-{
+pub trait Save<T> {
     fn save(&mut self, root: T) -> Result<()>;
 }
 
-pub trait StoreEvents<T>: Load<T> + Save<T>
-where
-    T: Streamable + Identifiable,
-{
-}
-
-struct EventEnvelope<T, TEvent>
-where
-    T: Streamable<EventType = TEvent> + Identifiable,
-    Id<T>: Clone,
-    TEvent: Clone,
-{
+struct EventEnvelope<T: Identifiable, TEvent> {
     pub id: Id<T>,
     pub event: TEvent,
 }
 
-impl<T, TEvent> EventEnvelope<T, TEvent>
-where
-    T: Streamable<EventType = TEvent> + Identifiable,
-    Id<T>: Clone,
-    TEvent: Clone,
-{
+impl<T: Identifiable, TEvent> EventEnvelope<T, TEvent> {
     fn new(id: Id<T>, event: TEvent) -> Self {
         Self { id, event }
     }
@@ -59,9 +39,7 @@ where
 
 pub struct InMemoryStorage<T, TEvent>
 where
-    T: Streamable<EventType = TEvent> + Identifiable,
-    Id<T>: Clone,
-    TEvent: Clone,
+    T: Identifiable,
 {
     events: Vec<EventEnvelope<T, TEvent>>,
 }
@@ -70,7 +48,7 @@ impl<T, TEvent> InMemoryStorage<T, TEvent>
 where
     T: Streamable<EventType = TEvent> + Identifiable,
     TEvent: 'static + std::fmt::Debug + Clone,
-    Id<T>: Hash + Clone,
+    Id<T>: Clone,
 {
     pub fn new() -> Self {
         Self { events: Vec::new() }
@@ -82,13 +60,26 @@ where
             .filter(move |x| &x.id == id)
             .map(|x| &x.event)
     }
+}
 
-    pub fn load(&mut self, id: &Id<T>) -> Result<T> {
+impl<T, TEvent> Load<T> for InMemoryStorage<T, TEvent>
+where
+    T: Streamable<EventType = TEvent> + Identifiable,
+    TEvent: 'static + std::fmt::Debug + Clone,
+    Id<T>: Clone,
+{
+    fn load(&mut self, id: &Id<T>) -> Result<T> {
         let events = self.select_events(id);
         T::load(events)
     }
+}
 
-    pub fn save(&mut self, mut root: T) -> Result<()> {
+impl<T, TEvent> Save<T> for InMemoryStorage<T, TEvent>
+where
+    T: Streamable<EventType = TEvent> + Identifiable,
+    Id<T>: Clone,
+{
+    fn save(&mut self, mut root: T) -> Result<()> {
         let id = root.id();
         let to_envelope = |e| EventEnvelope::new(id.clone(), e);
         let mut adapter = StreamAdapter::new(&mut self.events, to_envelope);

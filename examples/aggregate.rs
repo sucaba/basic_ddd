@@ -4,8 +4,8 @@ use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
-    Changable, Changes, Id, Identifiable, InMemoryStorage, Owned, OwnedCollection, OwnedEvent,
-    Primary, PrimaryEvent, Result, Stream, Streamable,
+    Changable, Changes, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection,
+    OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream, Streamable,
 };
 
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
