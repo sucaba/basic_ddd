@@ -413,8 +413,8 @@ mod owned_collection_tests {
 
         let mut changes = Changes::<Sut>::new();
 
-        changes.extend(sut.update_or_add(colored(1, Red)));
-        changes.extend(sut.update_or_add(colored(2, Red)));
+        changes.extend_changes(sut.update_or_add(colored(1, Red)));
+        changes.extend_changes(sut.update_or_add(colored(2, Red)));
 
         assert_eq!(
             sorted(changes.into()),

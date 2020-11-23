@@ -1,14 +1,60 @@
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use std::mem;
 use std::rc::Rc;
 
 pub fn changes<T: Changable>(event: T::EventType) -> Changes<T> {
     std::iter::once(event).collect()
 }
 
+pub trait AcceptsChanges<T: Changable> {
+    fn add_change(&mut self, item: T::EventType);
+}
+
 pub struct Changes<T: Changable> {
     inner: SmallList<<T as Changable>::EventType>,
+}
+
+pub struct AtomicChange<'a, T: Changable> {
+    owner: &'a mut Changes<T>,
+    size: usize,
+}
+
+impl<'a, T: Changable> AtomicChange<'a, T> {
+    pub fn commit(self) {
+        mem::forget(self)
+    }
+    pub fn rollback(mut self) {
+        self.internal_rollback();
+        mem::forget(self)
+    }
+
+    pub fn push(&mut self, item: T::EventType) {
+        self.owner.push(item)
+    }
+
+    fn internal_rollback(&mut self) {
+        self.owner.rollback(self.size);
+    }
+}
+
+impl<T: Changable> AcceptsChanges<T> for AtomicChange<'_, T> {
+    fn add_change(&mut self, item: T::EventType) {
+        self.push(item)
+    }
+}
+
+impl<T: Changable> AcceptsChanges<T> for Changes<T> {
+    fn add_change(&mut self, item: T::EventType) {
+        self.push(item)
+    }
+}
+
+impl<'a, T: Changable> Drop for AtomicChange<'a, T> {
+    fn drop(&mut self) {
+        self.internal_rollback();
+    }
 }
 
 impl<T: Changable> Changes<T> {
@@ -18,8 +64,32 @@ impl<T: Changable> Changes<T> {
         }
     }
 
+    pub fn atomic<S, E, F>(&mut self, f: F) -> Result<S, E>
+    where
+        F: FnOnce(&mut AtomicChange<'_, T>) -> Result<S, E>,
+    {
+        let mut trx = self.begin();
+        let result = f(&mut trx);
+        if result.is_ok() {
+            trx.commit();
+        }
+
+        result
+    }
+
+    pub fn begin(&mut self) -> AtomicChange<'_, T> {
+        AtomicChange {
+            size: self.inner.len(),
+            owner: self,
+        }
+    }
+
+    fn rollback(&mut self, point: usize) {
+        self.inner.truncate(point)
+    }
+
     pub fn to(self, dest: &mut Self) {
-        dest.extend(self)
+        dest.extend_changes(self)
     }
 
     pub fn push(&mut self, event: T::EventType) {
@@ -36,18 +106,20 @@ impl<T: Changable> Changes<T> {
     /*
      * TODO: remove becauseimmutable `f` causes issue
      */
-    pub fn ascend_to<O: Changable, F>(self, f: F, dest: &mut Changes<O>)
+    pub fn ascend_to<O, F, A>(self, f: F, dest: &mut A)
     where
+        O: Changable,
         F: Fn(T::EventType) -> O::EventType,
+        A: ExtendChanges<O>,
     {
-        dest.extend(self.into_iter().map(f));
+        dest.extend_changes(self.into_iter().map(f));
     }
 }
 
-trait ExtendTo: IntoIterator + Sized {
-    fn extend_to<I: Extend<Self::Item>>(self, other: &mut I) {
-        other.extend(self)
-    }
+pub trait ExtendChanges<O: Changable> {
+    fn extend_changes<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = O::EventType>;
 }
 
 impl<T: Changable> Default for Changes<T> {
@@ -89,9 +161,15 @@ where
     }
 }
 
-impl<T: Changable> Extend<T::EventType> for Changes<T> {
-    fn extend<I: IntoIterator<Item = T::EventType>>(&mut self, iter: I) {
+impl<T: Changable> ExtendChanges<T> for Changes<T> {
+    fn extend_changes<I: IntoIterator<Item = T::EventType>>(&mut self, iter: I) {
         self.inner.extend(iter)
+    }
+}
+
+impl<T: Changable> ExtendChanges<T> for AtomicChange<'_, T> {
+    fn extend_changes<I: IntoIterator<Item = T::EventType>>(&mut self, iter: I) {
+        self.owner.extend_changes(iter)
     }
 }
 
@@ -136,8 +214,16 @@ impl<T> SmallList<T> {
         Self { inner: Vec::new() }
     }
 
+    fn truncate(&mut self, size: usize) {
+        self.inner.truncate(size)
+    }
+
     pub fn push(&mut self, item: T) {
         self.inner.push(item)
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
     }
 }
 
@@ -428,6 +514,96 @@ where
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[derive(Debug, Eq, PartialEq)]
+    struct TestEntry {
+        state: TestEvent,
+    }
+
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    enum TestEvent {
+        Started,
+        Paused,
+        Stopped,
+    }
+
+    impl Changable for TestEntry {
+        type EventType = TestEvent;
+
+        fn apply(&mut self, event: &Self::EventType) {
+            use TestEvent::*;
+            match (self.state, event) {
+                (Stopped, Started) | (Paused, Started) | (Started, Stopped) | (Started, Paused) => {
+                    self.state = *event
+                }
+                _ => panic!("not supported"),
+            }
+        }
+    }
+
     #[test]
-    fn use_cases() {}
+    fn should_commit_changes() {
+        let mut changes = Changes::<TestEntry>::new();
+        changes.push(TestEvent::Started);
+        let mut trx = changes.begin();
+        trx.push(TestEvent::Stopped);
+        trx.commit();
+
+        let changes: Vec<_> = changes.into_iter().collect();
+        assert_eq!(vec![TestEvent::Started, TestEvent::Stopped], changes);
+    }
+
+    #[test]
+    fn should_commit_changes_using_atomic_fn() {
+        let mut changes = Changes::<TestEntry>::new();
+        changes.push(TestEvent::Started);
+        let _ = changes.atomic(|trx| -> Result<(), ()> {
+            trx.push(TestEvent::Stopped);
+            Ok(())
+        });
+
+        let changes: Vec<_> = changes.into_iter().collect();
+        assert_eq!(vec![TestEvent::Started, TestEvent::Stopped], changes);
+    }
+
+    #[test]
+    fn should_implicitly_rollback_changes_using_atomic_fn() {
+        let mut changes = Changes::<TestEntry>::new();
+        changes.push(TestEvent::Started);
+        let _ = changes.atomic(|trx| -> Result<(), ()> {
+            trx.push(TestEvent::Stopped);
+            Err(())
+        });
+
+        let changes: Vec<_> = changes.into_iter().collect();
+        assert_eq!(vec![TestEvent::Started], changes);
+    }
+
+    #[test]
+    fn should_implicitly_rollback_changes() {
+        let mut changes = Changes::<TestEntry>::new();
+        changes.push(TestEvent::Started);
+        {
+            let mut trx = changes.begin();
+            trx.push(TestEvent::Stopped);
+        }
+
+        let changes: Vec<_> = changes.into_iter().collect();
+        assert_eq!(vec![TestEvent::Started], changes);
+    }
+
+    #[test]
+    fn should_explicitly_rollback_changes_using_atomic_fn() {
+        let mut changes = Changes::<TestEntry>::new();
+        changes.push(TestEvent::Started);
+        let _ = changes.atomic(|trx| -> Result<(), ()> {
+            trx.push(TestEvent::Stopped);
+            Err(())
+        });
+
+        let changes: Vec<_> = changes.into_iter().collect();
+        assert_eq!(vec![TestEvent::Started], changes);
+    }
 }

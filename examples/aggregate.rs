@@ -63,15 +63,19 @@ impl Order {
      * `item_count` should match `items.len()`
      */
     fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
-        self.items
-            .add_new(item)?
-            .ascend_to(self.item_ascension(), &mut self.changes);
+        let item_ascension = self.item_ascension();
+        let primary_ascention = self.primary_ascension();
+        let items = &mut self.items;
+        let primary = &mut self.primary;
 
-        self.primary
-            .update(|p| p.item_count += 1)?
-            .ascend_to(self.primary_ascension(), &mut self.changes);
+        self.changes.atomic(|trx| {
+            items.add_new(item)?.ascend_to(item_ascension, trx);
 
-        Ok(())
+            primary
+                .update(|p| p.item_count += 1)?
+                .ascend_to(primary_ascention, trx);
+            Ok(())
+        })
     }
 
     fn item_ascension(&self) -> impl Fn(OrderItemEvent) -> OrderEvent {
