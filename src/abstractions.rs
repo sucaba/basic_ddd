@@ -8,10 +8,6 @@ pub fn changes<T: Changable>(event: T::EventType) -> Changes<T> {
     std::iter::once(event).collect()
 }
 
-pub trait AcceptsChanges<T: Changable> {
-    fn add_change(&mut self, item: T::EventType);
-}
-
 pub struct Changes<T: Changable> {
     inner: SmallList<<T as Changable>::EventType>,
 }
@@ -26,7 +22,7 @@ impl<'a, T: Changable> AtomicChange<'a, T> {
         mem::forget(self)
     }
     pub fn rollback(mut self) {
-        self.internal_rollback();
+        self.rollback_mut();
         mem::forget(self)
     }
 
@@ -34,26 +30,14 @@ impl<'a, T: Changable> AtomicChange<'a, T> {
         self.owner.push(item)
     }
 
-    fn internal_rollback(&mut self) {
-        self.owner.rollback(self.size);
-    }
-}
-
-impl<T: Changable> AcceptsChanges<T> for AtomicChange<'_, T> {
-    fn add_change(&mut self, item: T::EventType) {
-        self.push(item)
-    }
-}
-
-impl<T: Changable> AcceptsChanges<T> for Changes<T> {
-    fn add_change(&mut self, item: T::EventType) {
-        self.push(item)
+    fn rollback_mut(&mut self) {
+        self.owner.rollback_to(self.size);
     }
 }
 
 impl<'a, T: Changable> Drop for AtomicChange<'a, T> {
     fn drop(&mut self) {
-        self.internal_rollback();
+        self.rollback_mut();
     }
 }
 
@@ -69,12 +53,9 @@ impl<T: Changable> Changes<T> {
         F: FnOnce(&mut AtomicChange<'_, T>) -> Result<S, E>,
     {
         let mut trx = self.begin();
-        let result = f(&mut trx);
-        if result.is_ok() {
-            trx.commit();
-        }
-
-        result
+        let result = f(&mut trx)?;
+        trx.commit();
+        Ok(result)
     }
 
     pub fn begin(&mut self) -> AtomicChange<'_, T> {
@@ -84,7 +65,7 @@ impl<T: Changable> Changes<T> {
         }
     }
 
-    fn rollback(&mut self, point: usize) {
+    fn rollback_to(&mut self, point: usize) {
         self.inner.truncate(point)
     }
 
@@ -104,7 +85,7 @@ impl<T: Changable> Changes<T> {
     }
 
     /*
-     * TODO: remove becauseimmutable `f` causes issue
+     * TODO: remove because immutable `f` causes issue
      */
     pub fn ascend_to<O, F, A>(self, f: F, dest: &mut A)
     where
@@ -588,6 +569,7 @@ mod tests {
         {
             let mut trx = changes.begin();
             trx.push(TestEvent::Stopped);
+            // implictly rolled back here
         }
 
         let changes: Vec<_> = changes.into_iter().collect();

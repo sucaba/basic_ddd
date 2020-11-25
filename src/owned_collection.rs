@@ -312,6 +312,17 @@ where
         self.mutate(AllDeleted(owner_id))
     }
 
+    pub fn remove(
+        &mut self,
+        item: &T,
+    ) -> StdResult<Changes<Self>, NotFound<Id<T::IdentifiableType>>> {
+        let id = item.get_id();
+        match self.remove_by_id(&id) {
+            Err(_) => Err(NotFound(id)),
+            Ok(changes) => Ok(changes),
+        }
+    }
+
     pub fn remove_by_id<'a>(
         &mut self,
         id: &'a Id<T::IdentifiableType>,

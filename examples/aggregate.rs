@@ -62,29 +62,52 @@ impl Order {
      * Add item by preserving inner invariant:
      * `item_count` should match `items.len()`
      */
-    fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
-        let item_ascension = self.item_ascension();
-        let primary_ascention = self.primary_ascension();
+    fn add_new_item1(&mut self, item: Rc<OrderItem>) -> Result<()> {
+        // Save some state before mutations
+        let id = self.id().convert();
+
+        let mut trx = self.changes.begin();
+
+        &mut self
+            .items
+            .add_new(item)?
+            .ascend_to(move |event| OrderEvent::Item(id, event), &mut trx);
+
+        &mut self
+            .primary
+            .update(|p| p.item_count += 1)?
+            .ascend_to(OrderEvent::Primary, &mut trx);
+
+        trx.commit();
+        Ok(())
+    }
+
+    /*
+     * Add item by preserving inner invariant:
+     * `item_count` should match `items.len()`
+     */
+    fn add_new_item2(&mut self, item: Rc<OrderItem>) -> Result<()> {
+        // Save some state before mutations
+        let id = self.id().convert();
+        // Split borrows
         let items = &mut self.items;
         let primary = &mut self.primary;
 
         self.changes.atomic(|trx| {
-            items.add_new(item)?.ascend_to(item_ascension, trx);
+            let item_id = item.id();
+            items
+                .add_new(item)?
+                .ascend_to(move |event| OrderEvent::Item(id, event), trx);
 
             primary
-                .update(|p| p.item_count += 1)?
-                .ascend_to(primary_ascention, trx);
+                .update(|p| p.item_count += 1)
+                .or_else(|err| {
+                    let _r = items.remove_by_id(&item_id);
+                    Err(err)
+                })?
+                .ascend_to(OrderEvent::Primary, trx);
             Ok(())
         })
-    }
-
-    fn item_ascension(&self) -> impl Fn(OrderItemEvent) -> OrderEvent {
-        let id = self.id().convert();
-        move |event| OrderEvent::Item(id, event)
-    }
-
-    fn primary_ascension(&self) -> impl Fn(OrderPrimaryEvent) -> OrderEvent {
-        OrderEvent::Primary
     }
 }
 
@@ -163,7 +186,8 @@ fn create_new_order(id: i32) -> Result<Order> {
         id,
         item_count: 777, // ignored
     });
-    aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
+    aggregate.add_new_item1(OrderItem { id: 1001 }.into())?;
+    aggregate.add_new_item2(OrderItem { id: 1002 }.into())?;
 
     Ok(aggregate)
 }
