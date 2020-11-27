@@ -13,7 +13,7 @@ pub struct Changes<T: Changable> {
 }
 
 pub struct AtomicChange<'a, T: Changable> {
-    owner: &'a mut Changes<T>,
+    changes: &'a mut Changes<T>,
     size: usize,
 }
 
@@ -27,11 +27,11 @@ impl<'a, T: Changable> AtomicChange<'a, T> {
     }
 
     pub fn push(&mut self, item: T::EventType) {
-        self.owner.push(item)
+        self.changes.push(item)
     }
 
     fn rollback_mut(&mut self) {
-        self.owner.rollback_to(self.size);
+        self.changes.rollback_to(self.size);
     }
 }
 
@@ -61,7 +61,7 @@ impl<T: Changable> Changes<T> {
     pub fn begin(&mut self) -> AtomicChange<'_, T> {
         AtomicChange {
             size: self.inner.len(),
-            owner: self,
+            changes: self,
         }
     }
 
@@ -77,17 +77,14 @@ impl<T: Changable> Changes<T> {
         self.inner.push(event)
     }
 
-    pub fn ascend<F, O: Changable>(self, f: F) -> Changes<O>
+    pub fn map<F, O: Changable>(self, f: F) -> Changes<O>
     where
         F: Fn(T::EventType) -> O::EventType,
     {
         self.into_iter().map(f).collect::<Changes<O>>()
     }
 
-    /*
-     * TODO: remove because immutable `f` causes issue
-     */
-    pub fn ascend_to<O, F, A>(self, f: F, dest: &mut A)
+    pub fn bubble_up<O, F, A>(self, f: F, dest: &mut A)
     where
         O: Changable,
         F: Fn(T::EventType) -> O::EventType,
@@ -150,7 +147,7 @@ impl<T: Changable> ExtendChanges<T> for Changes<T> {
 
 impl<T: Changable> ExtendChanges<T> for AtomicChange<'_, T> {
     fn extend_changes<I: IntoIterator<Item = T::EventType>>(&mut self, iter: I) {
-        self.owner.extend_changes(iter)
+        self.changes.extend_changes(iter)
     }
 }
 

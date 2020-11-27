@@ -68,15 +68,13 @@ impl Order {
 
         let mut trx = self.changes.begin();
 
-        &mut self
-            .items
+        self.items
             .add_new(item)?
-            .ascend_to(move |event| OrderEvent::Item(id, event), &mut trx);
+            .bubble_up(move |event| OrderEvent::Item(id, event), &mut trx);
 
-        &mut self
-            .primary
+        self.primary
             .update(|p| p.item_count += 1)?
-            .ascend_to(OrderEvent::Primary, &mut trx);
+            .bubble_up(OrderEvent::Primary, &mut trx);
 
         trx.commit();
         Ok(())
@@ -94,18 +92,13 @@ impl Order {
         let primary = &mut self.primary;
 
         self.changes.atomic(|trx| {
-            let item_id = item.id();
             items
                 .add_new(item)?
-                .ascend_to(move |event| OrderEvent::Item(id, event), trx);
+                .bubble_up(move |event| OrderEvent::Item(id, event), trx);
 
             primary
-                .update(|p| p.item_count += 1)
-                .or_else(|err| {
-                    let _r = items.remove_by_id(&item_id);
-                    Err(err)
-                })?
-                .ascend_to(OrderEvent::Primary, trx);
+                .update(|p| p.item_count += 1)?
+                .bubble_up(OrderEvent::Primary, trx);
             Ok(())
         })
     }
