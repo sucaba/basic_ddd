@@ -2,6 +2,7 @@
 
 
 0. Remove AllDeleted event because there is no existing
+
 anti-event and even if exists, it seems too heavy.
 0. Atomic undo:
     - begin is called on Changable and not on changes

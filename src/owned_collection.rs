@@ -16,7 +16,6 @@ where
     Created(T),
     Updated(usize, T),
     Deleted(Id<<T as GetId>::IdentifiableType>),
-    AllDeleted(Id<<T::IdentifiableType as Owned>::OwnerType>),
 }
 
 impl<T> OwnedEvent<T>
@@ -30,7 +29,6 @@ where
             Created(x) => Some(x.get_id()),
             Updated(_, x) => Some(x.get_id()),
             Deleted(id) => Some(id.clone()),
-            AllDeleted(_) => None,
         }
     }
 
@@ -68,7 +66,6 @@ where
             Created(x) => write!(f, "DbOwnedEvent::Created({:?})", x),
             Updated(pos, x) => write!(f, "DbOwnedEvent::Updated({:?}, {:?})", pos, x),
             Deleted(x) => write!(f, "DbOwnedEvent::Deleted({:?})", x),
-            AllDeleted(x) => write!(f, "DbOwnedEvent::AllDeleted({:?})", x),
         }
     }
 }
@@ -83,7 +80,6 @@ where
             (Created(x), Created(y)) => x == y,
             (Updated(pos1, x), Updated(pos2, y)) => pos1 == pos2 && x == y,
             (Deleted(x), Deleted(y)) => x == y,
-            (AllDeleted(x), AllDeleted(y)) => x == y,
             _ => false,
         }
     }
@@ -108,7 +104,6 @@ where
             Created(x) => Created(x.clone()),
             Updated(pos, x) => Updated(pos.clone(), x.clone()),
             Deleted(x) => Deleted(x.clone()),
-            AllDeleted(x) => AllDeleted(x.clone()),
         }
     }
 }
@@ -240,7 +235,6 @@ where
                     self.inner.remove(i);
                 }
             }
-            AllDeleted(_) => self.inner.clear(),
         }
     }
 }
@@ -300,16 +294,6 @@ where
 
     fn position_by_id(&self, id: &Id<T::IdentifiableType>) -> Option<usize> {
         self.inner.iter().position(|x| &x.get_id() == id)
-    }
-
-    pub fn remove_all(
-        &mut self,
-        owner_id: Id<<T::IdentifiableType as Owned>::OwnerType>,
-    ) -> Changes<Self>
-    where
-        Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
-    {
-        self.mutate(AllDeleted(owner_id))
     }
 
     pub fn remove(
@@ -457,17 +441,6 @@ mod owned_collection_tests {
         let changes: Vec<_> = removed.unwrap().into();
 
         assert_eq!(changes, vec![Deleted(colored(EXISTING_ID, Red).get_id())]);
-    }
-
-    #[test]
-    fn delete_all_event_is_streamed() {
-        let mut sut = setup();
-
-        let owner_id = (TestOwner { id: 1 }).get_id();
-
-        let changes: Vec<_> = sut.remove_all(owner_id).into();
-
-        assert_eq!(changes, vec![AllDeleted(owner_id)]);
     }
 
     fn sorted<T>(mut events: Vec<OwnedEvent<T>>) -> Vec<OwnedEvent<T>>
