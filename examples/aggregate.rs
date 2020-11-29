@@ -4,8 +4,8 @@ use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
-    Changable, Changes, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection,
-    OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream, Streamable,
+    AtomicallyChangable, BasicChange, Changable, Changes, Id, Identifiable, InMemoryStorage, Load,
+    Owned, OwnedCollection, OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream, Streamable,
 };
 
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
@@ -62,45 +62,24 @@ impl Order {
      * Add item by preserving inner invariant:
      * `item_count` should match `items.len()`
      */
-    fn add_new_item1(&mut self, item: Rc<OrderItem>) -> Result<()> {
+    fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
         // Save some state before mutations
         let id = self.id().convert();
 
-        let mut trx = self.changes.begin();
+        let mut trx = self.begin();
 
-        self.items
+        trx.subj_mut()
+            .items
             .add_new(item)?
-            .bubble_up(move |event| OrderEvent::Item(id, event), &mut trx);
+            .bubble_up(move |ch| ch.convert(|e| OrderEvent::Item(id, e)), &mut trx);
 
-        self.primary
+        trx.subj_mut()
+            .primary
             .update(|p| p.item_count += 1)?
-            .bubble_up(OrderEvent::Primary, &mut trx);
+            .bubble_up(|ch| ch.convert(OrderEvent::Primary), &mut trx);
 
         trx.commit();
         Ok(())
-    }
-
-    /*
-     * Add item by preserving inner invariant:
-     * `item_count` should match `items.len()`
-     */
-    fn add_new_item2(&mut self, item: Rc<OrderItem>) -> Result<()> {
-        // Save some state before mutations
-        let id = self.id().convert();
-        // Split borrows
-        let items = &mut self.items;
-        let primary = &mut self.primary;
-
-        self.changes.atomic(|trx| {
-            items
-                .add_new(item)?
-                .bubble_up(move |event| OrderEvent::Item(id, event), trx);
-
-            primary
-                .update(|p| p.item_count += 1)?
-                .bubble_up(OrderEvent::Primary, trx);
-            Ok(())
-        })
     }
 }
 
@@ -126,13 +105,27 @@ impl Changable for Order {
     }
 }
 
+impl AtomicallyChangable for Order {
+    fn trim_changes(&mut self, check_point: usize) -> Changes<Self> {
+        self.changes.take_after(check_point)
+    }
+
+    fn changes(&self) -> &Changes<Self> {
+        &self.changes
+    }
+
+    fn changes_mut(&mut self) -> &mut Changes<Self> {
+        &mut self.changes
+    }
+}
+
 impl Streamable for Order {
     fn stream_to<S>(&mut self, stream: &mut S)
     where
         S: Stream<Self::EventType>,
     {
         let changes = mem::take(&mut self.changes);
-        stream.stream(changes);
+        stream.stream(changes.into_iter().map(BasicChange::take_redo));
     }
 }
 
@@ -179,8 +172,8 @@ fn create_new_order(id: i32) -> Result<Order> {
         id,
         item_count: 777, // ignored
     });
-    aggregate.add_new_item1(OrderItem { id: 1001 }.into())?;
-    aggregate.add_new_item2(OrderItem { id: 1002 }.into())?;
+    aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
+    aggregate.add_new_item(OrderItem { id: 1002 }.into())?;
 
     Ok(aggregate)
 }

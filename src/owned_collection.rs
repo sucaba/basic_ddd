@@ -1,3 +1,4 @@
+// TODO: Remove std::hash references
 use super::abstractions::*;
 use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
@@ -274,7 +275,7 @@ where
      */
     pub fn update(&mut self, item: T) -> StdResult<Changes<Self>, NotFound<T>> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
-            Ok(self.mutate(Updated(pos, item)))
+            Ok(self.mutate(Updated(pos, item), Updated(pos, self.inner[pos].clone())))
         } else {
             Err(NotFound(item))
         }
@@ -285,8 +286,9 @@ where
      * Returns `Err(item)` if item with the same already exists.
      */
     pub fn add_new(&mut self, item: T) -> StdResult<Changes<Self>, AlreadyExists<T>> {
-        if let None = self.position_by_id(&item.get_id()) {
-            Ok(self.mutate(Created(item)))
+        let id = item.get_id();
+        if let None = self.position_by_id(&id) {
+            Ok(self.mutate(Created(item), Deleted(id)))
         } else {
             Err(AlreadyExists(item))
         }
@@ -311,8 +313,8 @@ where
         &mut self,
         id: &'a Id<T::IdentifiableType>,
     ) -> StdResult<Changes<Self>, NotFound<&'a Id<T::IdentifiableType>>> {
-        if let Some(_) = self.position_by_id(id) {
-            Ok(self.mutate(Deleted(id.clone())))
+        if let Some(pos) = self.position_by_id(id) {
+            Ok(self.mutate(Deleted(id.clone()), Created(self.inner[pos].clone())))
         } else {
             Err(NotFound(id))
         }
@@ -413,7 +415,16 @@ mod owned_collection_tests {
 
         assert_eq!(
             sorted(changes.into()),
-            vec![Created(colored(1, Red)), Created(colored(2, Red))]
+            vec![
+                BasicChange {
+                    redo: Created(colored(1, Red)),
+                    undo: Deleted(colored(1, Red).get_id())
+                },
+                BasicChange {
+                    redo: Created(colored(2, Red)),
+                    undo: Deleted(colored(2, Red).get_id())
+                }
+            ]
         );
     }
 
@@ -425,7 +436,10 @@ mod owned_collection_tests {
 
         assert_eq!(
             changes,
-            vec![Updated(EXISTING_POS, colored(EXISTING_ID, Red))]
+            vec![BasicChange {
+                redo: Updated(EXISTING_POS, colored(EXISTING_ID, Red)),
+                undo: Updated(EXISTING_POS, colored(EXISTING_ID, None))
+            }]
         );
     }
 
@@ -440,16 +454,24 @@ mod owned_collection_tests {
 
         let changes: Vec<_> = removed.unwrap().into();
 
-        assert_eq!(changes, vec![Deleted(colored(EXISTING_ID, Red).get_id())]);
+        assert_eq!(
+            changes,
+            vec![BasicChange {
+                redo: Deleted(colored(EXISTING_ID, Red).get_id()),
+                undo: Created(colored(EXISTING_ID, None))
+            }]
+        );
     }
 
-    fn sorted<T>(mut events: Vec<OwnedEvent<T>>) -> Vec<OwnedEvent<T>>
+    fn sorted<T>(
+        mut events: Vec<BasicChange<OwnedCollection<T>>>,
+    ) -> Vec<BasicChange<OwnedCollection<T>>>
     where
-        T: GetId,
+        T: GetId + Clone,
         T::IdentifiableType: Owned,
-        Id<T::IdentifiableType>: Clone + Ord,
+        Id<T::IdentifiableType>: hash::Hash + Clone + Ord,
     {
-        events.sort_by_key(OwnedEvent::get_id);
+        events.sort_by_key(|BasicChange { redo, .. }| OwnedEvent::get_id(&redo));
         events
     }
 }

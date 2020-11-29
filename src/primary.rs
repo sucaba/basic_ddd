@@ -130,8 +130,9 @@ where
     where
         T: Clone,
     {
-        if self.inner.is_some() {
-            Ok(self.mutate(Updated(row)))
+        if let Some(existing) = &self.inner {
+            let existing = existing.clone();
+            Ok(self.mutate(Updated(row), Updated(existing)))
         } else {
             Err(NotFound(row))
         }
@@ -142,9 +143,11 @@ where
         F: FnOnce(&mut T),
         T: Clone,
     {
-        if let Some(mut modified) = self.inner.clone() {
+        if let Some(existing) = &self.inner {
+            let mut modified = existing.clone();
             f(&mut modified);
-            Ok(self.mutate(Updated(modified)))
+            let existing = existing.clone();
+            Ok(self.mutate(Updated(modified), Updated(existing)))
         } else {
             Err(NotFound(()))
         }
@@ -156,7 +159,8 @@ where
     {
         if let Some(existing) = &self.inner {
             let id = existing.get_id();
-            Ok(self.mutate(Deleted(id)))
+            let existing = existing.clone();
+            Ok(self.mutate(Deleted(id), Created(existing)))
         } else {
             Err(NotFound(()))
         }
@@ -221,10 +225,16 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![Updated(MyEntity {
-                id: ID,
-                name: "bar".into()
-            })]
+            vec![BasicChange {
+                redo: Updated(MyEntity {
+                    id: ID,
+                    name: "bar".into()
+                }),
+                undo: Updated(MyEntity {
+                    id: ID,
+                    name: "foo".into()
+                })
+            }]
         );
     }
 
@@ -237,10 +247,16 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![Updated(MyEntity {
-                id: ID,
-                name: "bar".into()
-            })]
+            vec![BasicChange {
+                redo: Updated(MyEntity {
+                    id: ID,
+                    name: "bar".into()
+                }),
+                undo: Updated(MyEntity {
+                    id: ID,
+                    name: "foo".into()
+                })
+            }]
         );
     }
 
@@ -253,13 +269,19 @@ mod tests {
         assert_eq!(sut.try_get(), None);
         assert_eq!(
             changes,
-            vec![Deleted(
-                (MyEntity {
+            vec![BasicChange {
+                redo: Deleted(
+                    (MyEntity {
+                        id: ID,
+                        name: "foo".into()
+                    })
+                    .get_id()
+                ),
+                undo: Created(MyEntity {
                     id: ID,
                     name: "foo".into()
                 })
-                .get_id()
-            )]
+            }]
         );
     }
 }
