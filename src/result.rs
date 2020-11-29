@@ -7,8 +7,19 @@ pub struct Error {
 pub struct AlreadyExists<T>(pub T);
 pub struct NotFound<T>(pub T);
 
+#[non_exhaustive]
 pub(crate) enum InnerError {
     ByMessage(String),
+}
+
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        use InnerError::*;
+        match (&self.inner, &other.inner) {
+            (ByMessage(x), ByMessage(y)) if x == y => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Debug for Error {
@@ -38,6 +49,12 @@ impl<T: fmt::Debug> From<AlreadyExists<T>> for Error {
 impl<T: fmt::Debug> From<NotFound<T>> for Error {
     fn from(value: NotFound<T>) -> Self {
         Self::from_text(format!("{0:#?}", value))
+    }
+}
+
+impl From<String> for Error {
+    fn from(value: String) -> Self {
+        Self::from_text(value)
     }
 }
 

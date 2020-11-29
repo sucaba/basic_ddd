@@ -5,7 +5,23 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 use std::ops;
 use std::rc::Rc;
+use std::result;
 use std::vec;
+
+pub trait BubbleUpResult<T: Changable, E> {
+    fn bubble_up<F, O: Changable>(self, f: F) -> result::Result<Changes<O>, E>
+    where
+        F: Copy + Clone + Fn(T::EventType) -> O::EventType;
+}
+
+impl<T: Changable, E> BubbleUpResult<T, E> for result::Result<Changes<T>, E> {
+    fn bubble_up<F, O: Changable>(self, f: F) -> result::Result<Changes<O>, E>
+    where
+        F: Clone + Fn(T::EventType) -> O::EventType,
+    {
+        self.map(|x| x.bubble_up(f))
+    }
+}
 
 pub fn changes<T: Changable>(event: BasicChange<T>) -> Changes<T> {
     std::iter::once(event).collect()
@@ -25,7 +41,7 @@ impl<T: Changable> BasicChange<T> {
         self.undo
     }
 
-    pub fn convert<O, F>(self, f: F) -> BasicChange<O>
+    pub fn bubble_up<O, F>(self, f: F) -> BasicChange<O>
     where
         O: Changable,
         F: Fn(T::EventType) -> O::EventType,
@@ -76,35 +92,6 @@ pub struct Changes<T: Changable> {
     inner: SmallList<BasicChange<T>>,
 }
 
-pub struct AtomicChange<'a, T: Changable> {
-    changes: &'a mut Changes<T>,
-    size: usize,
-}
-
-impl<'a, T: Changable> AtomicChange<'a, T> {
-    pub fn commit(self) {
-        mem::forget(self)
-    }
-    pub fn rollback(mut self) {
-        self.rollback_mut();
-        mem::forget(self)
-    }
-
-    pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
-        self.changes.push(redo, undo)
-    }
-
-    fn rollback_mut(&mut self) {
-        self.changes.rollback_to(self.size);
-    }
-}
-
-impl<'a, T: Changable> Drop for AtomicChange<'a, T> {
-    fn drop(&mut self) {
-        self.rollback_mut();
-    }
-}
-
 impl<T: Changable> Changes<T> {
     pub fn new() -> Self {
         Changes {
@@ -133,27 +120,6 @@ impl<T: Changable> Changes<T> {
         self.inner.drain(range)
     }
 
-    pub fn atomic<S, E, F>(&mut self, f: F) -> Result<S, E>
-    where
-        F: FnOnce(&mut AtomicChange<'_, T>) -> Result<S, E>,
-    {
-        let mut trx = self.begin();
-        let result = f(&mut trx)?;
-        trx.commit();
-        Ok(result)
-    }
-
-    pub fn begin(&mut self) -> AtomicChange<'_, T> {
-        AtomicChange {
-            size: self.inner.len(),
-            changes: self,
-        }
-    }
-
-    fn rollback_to(&mut self, point: usize) {
-        self.inner.truncate(point)
-    }
-
     pub fn to(self, dest: &mut Self) {
         dest.extend_changes(self)
     }
@@ -169,13 +135,13 @@ impl<T: Changable> Changes<T> {
         self.into_iter().map(f).collect::<Changes<O>>()
     }
 
-    pub fn bubble_up<O, F, A>(self, f: F, dest: &mut A)
+    pub fn bubble_up<F, O: Changable>(self, f: F) -> Changes<O>
     where
-        O: Changable,
-        F: Fn(BasicChange<T>) -> BasicChange<O>,
-        A: ExtendChanges<O>,
+        F: Clone + Fn(T::EventType) -> O::EventType,
     {
-        dest.extend_changes(self.into_iter().map(f));
+        self.into_iter()
+            .map(move |ch| ch.bubble_up(f.clone()))
+            .collect::<Changes<O>>()
     }
 }
 
@@ -242,18 +208,6 @@ impl<T: Changable> ExtendChanges<T> for Changes<T> {
     }
 }
 
-impl<T: Changable> ExtendChanges<T> for AtomicChange<'_, T> {
-    fn extend_changes<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
-        self.changes.extend_changes(iter)
-    }
-}
-
-impl<T: AtomicallyChangable> ExtendChanges<T> for Atomic<'_, T> {
-    fn extend_changes<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
-        self.subj_mut().changes_mut().extend_changes(iter)
-    }
-}
-
 impl<T: Changable> Into<Vec<BasicChange<T>>> for Changes<T> {
     fn into(self) -> Vec<BasicChange<T>> {
         self.inner.into_iter().collect()
@@ -293,10 +247,6 @@ where
 impl<T> SmallList<T> {
     pub fn new() -> Self {
         Self { inner: Vec::new() }
-    }
-
-    fn truncate(&mut self, size: usize) {
-        self.inner.truncate(size)
     }
 
     pub fn take_after(&mut self, pos: usize) -> Self {
@@ -542,11 +492,20 @@ pub struct Atomic<'a, T: AtomicallyChangable> {
 }
 
 impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
-    pub fn subj(&self) -> &T {
-        &self.subj
+    pub fn mutate_inner<F, E>(&mut self, f: F) -> Result<(), E>
+    where
+        F: FnOnce(&mut T) -> Result<Changes<T>, E>,
+    {
+        let changes = f(self.subj)?;
+        self.subj.changes_mut().extend_changes(changes);
+        Ok(())
     }
-    pub fn subj_mut(&mut self) -> &mut T {
-        &mut self.subj
+
+    pub fn invoke<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        f(self.subj)
     }
 
     pub fn commit(self) {
@@ -556,20 +515,18 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
 
 impl<'a, T: AtomicallyChangable> Drop for Atomic<'a, T> {
     fn drop(&mut self) {
-        let to_compensate = self.subj.trim_changes(self.check_point);
-        for BasicChange { undo, redo: _ } in to_compensate.iter() {
+        let to_compensate = self.subj.changes_mut().take_after(self.check_point);
+        for BasicChange { undo, .. } in to_compensate.iter() {
             self.subj.apply(&undo);
         }
     }
 }
 
 pub trait AtomicallyChangable: Changable + Sized {
-    fn trim_changes(&mut self, check_point: usize) -> Changes<Self>;
-    fn changes(&self) -> &Changes<Self>;
     fn changes_mut(&mut self) -> &mut Changes<Self>;
 
     fn begin<'a>(&'a mut self) -> Atomic<'a, Self> {
-        let check_point = self.changes().len();
+        let check_point = self.changes_mut().len();
         Atomic {
             subj: self,
             check_point,
@@ -685,13 +642,12 @@ mod tests {
         /// Example of atomic operation which fails in the middle
         /// and causes compensation logic to restore state before
         /// the action start
-        fn double_start(&mut self) -> Result<(), String> {
+        fn double_start(&mut self) -> crate::result::Result<()> {
             let mut trx = self.begin();
 
-            trx.subj_mut().start()?;
-            // implictly rolledback after the following
-            // failed call in a `trx.drop()`
-            trx.subj_mut().start()?;
+            trx.invoke(Self::start)?;
+            trx.invoke(Self::start)?; // fail and rollback
+
             Ok(())
         }
 
@@ -710,7 +666,6 @@ mod tests {
         type EventType = TestEvent;
 
         fn apply(&mut self, event: &Self::EventType) {
-            println!("applying {:#?}", event);
             match (self.state, event) {
                 (Stopped, Started) | (Paused, Started) | (Started, Stopped) | (Started, Paused) => {
                     self.state = *event
@@ -721,16 +676,6 @@ mod tests {
     }
 
     impl AtomicallyChangable for TestEntry {
-        fn trim_changes(&mut self, check_point: usize) -> Changes<Self> {
-            let result = self.changes.take_after(check_point);
-            println!("take_after(checkpoint={})={:#?}", check_point, result);
-            result
-        }
-
-        fn changes(&self) -> &Changes<Self> {
-            &self.changes
-        }
-
         fn changes_mut(&mut self) -> &mut Changes<Self> {
             &mut self.changes
         }
@@ -828,7 +773,9 @@ mod tests {
             .collect(),
         };
 
-        assert_eq!(sut.double_start(), Err("Already started".into()));
+        let r: crate::result::Result<()> = sut.double_start();
+        let r2: crate::result::Result<()> = Err("Already started".to_string().into());
+        assert_eq!(r, r2);
 
         assert_eq!(Stopped, sut.state);
 

@@ -4,8 +4,9 @@ use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
-    AtomicallyChangable, BasicChange, Changable, Changes, Id, Identifiable, InMemoryStorage, Load,
-    Owned, OwnedCollection, OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream, Streamable,
+    AtomicallyChangable, BasicChange, BubbleUpResult, Changable, Changes, Id, Identifiable,
+    InMemoryStorage, Load, Owned, OwnedCollection, OwnedEvent, Primary, PrimaryEvent, Result, Save,
+    Stream, Streamable,
 };
 
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
@@ -68,15 +69,17 @@ impl Order {
 
         let mut trx = self.begin();
 
-        trx.subj_mut()
-            .items
-            .add_new(item)?
-            .bubble_up(move |ch| ch.convert(|e| OrderEvent::Item(id, e)), &mut trx);
+        trx.mutate_inner(move |subj| {
+            subj.items
+                .add_new(item)
+                .bubble_up(|e| OrderEvent::Item(id, e))
+        })?;
 
-        trx.subj_mut()
-            .primary
-            .update(|p| p.item_count += 1)?
-            .bubble_up(|ch| ch.convert(OrderEvent::Primary), &mut trx);
+        trx.mutate_inner(|subj| {
+            subj.primary
+                .update(|p| p.item_count += 1)
+                .bubble_up(OrderEvent::Primary)
+        })?;
 
         trx.commit();
         Ok(())
@@ -94,10 +97,7 @@ impl Identifiable for Order {
 impl Changable for Order {
     type EventType = OrderEvent;
 
-    fn apply(&mut self, event: &Self::EventType)
-    where
-        Self::EventType: Clone,
-    {
+    fn apply(&mut self, event: &Self::EventType) {
         match event {
             OrderEvent::Primary(e) => self.primary.apply(e),
             OrderEvent::Item(_id, e) => self.items.apply(e),
@@ -106,14 +106,6 @@ impl Changable for Order {
 }
 
 impl AtomicallyChangable for Order {
-    fn trim_changes(&mut self, check_point: usize) -> Changes<Self> {
-        self.changes.take_after(check_point)
-    }
-
-    fn changes(&self) -> &Changes<Self> {
-        &self.changes
-    }
-
     fn changes_mut(&mut self) -> &mut Changes<Self> {
         &mut self.changes
     }
