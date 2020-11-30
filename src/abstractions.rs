@@ -487,12 +487,12 @@ pub trait Changable {
     fn apply(&mut self, event: &Self::EventType) -> Self::EventType;
 
     #[inline]
-    fn mutate(&mut self, redo: Self::EventType) -> BasicChange<Self>
+    fn mutate(&mut self, event: Self::EventType) -> BasicChange<Self>
     where
         Self: Sized,
     {
-        let undo = self.apply(&redo);
-        BasicChange { redo, undo }
+        let undo = self.apply(&event);
+        BasicChange { redo: event, undo }
     }
 }
 
