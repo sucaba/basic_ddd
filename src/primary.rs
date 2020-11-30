@@ -108,14 +108,17 @@ impl<T: GetId> Primary<T>
 where
     PrimaryEvent<T>: Sized,
 {
-    pub fn new(row: T) -> Self
+    pub fn new(row: T) -> (Self, Changes<Self>)
     where
         T: Clone,
     {
-        Self {
-            inner: Some(row.clone()),
+        let mut result = Self {
+            inner: None,
             complete: true,
-        }
+        };
+
+        let changes = result.create(row);
+        (result, changes)
     }
 
     pub fn get(&self) -> &T {
@@ -126,13 +129,21 @@ where
         self.inner.as_ref()
     }
 
+    pub fn create(&mut self, row: T) -> Changes<Self>
+    where
+        T: Clone,
+    {
+        let id = row.get_id();
+        Changes::once(self.mutate(Created(row), Deleted(id)))
+    }
+
     pub fn set(&mut self, row: T) -> StdResult<Changes<Self>, NotFound<T>>
     where
         T: Clone,
     {
         if let Some(existing) = &self.inner {
             let existing = existing.clone();
-            Ok(self.mutate(Updated(row), Updated(existing)))
+            Ok(Changes::once(self.mutate(Updated(row), Updated(existing))))
         } else {
             Err(NotFound(row))
         }
@@ -147,7 +158,9 @@ where
             let mut modified = existing.clone();
             f(&mut modified);
             let existing = existing.clone();
-            Ok(self.mutate(Updated(modified), Updated(existing)))
+            Ok(Changes::once(
+                self.mutate(Updated(modified), Updated(existing)),
+            ))
         } else {
             Err(NotFound(()))
         }
@@ -160,7 +173,7 @@ where
         if let Some(existing) = &self.inner {
             let id = existing.get_id();
             let existing = existing.clone();
-            Ok(self.mutate(Deleted(id), Created(existing)))
+            Ok(Changes::once(self.mutate(Deleted(id), Created(existing))))
         } else {
             Err(NotFound(()))
         }
@@ -173,11 +186,20 @@ where
 {
     type EventType = PrimaryEvent<T>;
 
-    fn apply(&mut self, event: &Self::EventType) {
+    fn apply(&mut self, event: &Self::EventType) -> Self::EventType {
         match event {
-            Created(x) => self.inner = Some(x.clone()),
-            Updated(x) => self.inner = Some(x.clone()),
-            Deleted(_) => self.inner = None,
+            Created(x) => {
+                self.inner = Some(x.clone());
+                Deleted(x.get_id())
+            }
+            Updated(x) => {
+                let old = self.inner.replace(x.clone());
+                Updated(old.expect("Dev err: update before create"))
+            }
+            Deleted(_) => {
+                let old = self.inner.take();
+                Created(old.expect("Dev err: delete before create"))
+            }
         }
     }
 }
@@ -204,10 +226,12 @@ mod tests {
     const ID: i32 = 42;
 
     fn setup() -> Primary<MyEntity> {
-        Primary::new(MyEntity {
+        let (result, _changes) = Primary::new(MyEntity {
             id: ID,
             name: "foo".into(),
-        })
+        });
+
+        result
     }
 
     #[test]

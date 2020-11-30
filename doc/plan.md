@@ -1,9 +1,5 @@
 # Plan
 
-0. Atomic undo:
-    - begin is called on Changable and not on changes
-    - Change entry should contain pair event and anti-event for
-        compensation or undo logic
 0. apply() releases old resources which can be stored in undo event
 1. aggregate example: add_new_item should be atomic
 4. apply should return result which is Err if event is inconsistent with

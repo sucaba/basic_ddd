@@ -4,6 +4,7 @@ use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
 use std::hash;
+use std::mem;
 use std::ops;
 use std::result::Result as StdResult;
 use std::slice;
@@ -225,16 +226,20 @@ where
 {
     type EventType = OwnedEvent<T>;
 
-    fn apply(&mut self, event: &Self::EventType) {
+    fn apply(&mut self, event: &Self::EventType) -> Self::EventType {
         match event {
-            Created(x) => self.inner.push(x.clone()),
+            Created(x) => {
+                self.inner.push(x.clone());
+                Deleted(x.get_id())
+            }
             Updated(pos, x) => {
-                self.inner[*pos] = x.clone();
+                let old = mem::replace(&mut self.inner[*pos], x.clone());
+                Updated(*pos, old)
             }
             Deleted(id) => {
-                if let Some(i) = self.position_by_id(id) {
-                    self.inner.remove(i);
-                }
+                let i = self.position_by_id(id).expect("Dev error: id not found");
+                let old = self.inner.remove(i);
+                Created(old)
             }
         }
     }
@@ -275,7 +280,10 @@ where
      */
     pub fn update(&mut self, item: T) -> StdResult<Changes<Self>, NotFound<T>> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
-            Ok(self.mutate(Updated(pos, item), Updated(pos, self.inner[pos].clone())))
+            Ok(Changes::once(self.mutate(
+                Updated(pos, item),
+                Updated(pos, self.inner[pos].clone()),
+            )))
         } else {
             Err(NotFound(item))
         }
@@ -288,7 +296,7 @@ where
     pub fn add_new(&mut self, item: T) -> StdResult<Changes<Self>, AlreadyExists<T>> {
         let id = item.get_id();
         if let None = self.position_by_id(&id) {
-            Ok(self.mutate(Created(item), Deleted(id)))
+            Ok(Changes::once(self.mutate(Created(item), Deleted(id))))
         } else {
             Err(AlreadyExists(item))
         }
@@ -314,7 +322,10 @@ where
         id: &'a Id<T::IdentifiableType>,
     ) -> StdResult<Changes<Self>, NotFound<&'a Id<T::IdentifiableType>>> {
         if let Some(pos) = self.position_by_id(id) {
-            Ok(self.mutate(Deleted(id.clone()), Created(self.inner[pos].clone())))
+            Ok(Changes::once(self.mutate(
+                Deleted(id.clone()),
+                Created(self.inner[pos].clone()),
+            )))
         } else {
             Err(NotFound(id))
         }

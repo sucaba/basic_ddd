@@ -99,6 +99,12 @@ impl<T: Changable> Changes<T> {
         }
     }
 
+    pub fn once(item: BasicChange<T>) -> Self {
+        Self {
+            inner: SmallList::once(item),
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.inner.len()
     }
@@ -247,6 +253,10 @@ where
 impl<T> SmallList<T> {
     pub fn new() -> Self {
         Self { inner: Vec::new() }
+    }
+
+    pub fn once(item: T) -> Self {
+        Self { inner: vec![item] }
     }
 
     pub fn take_after(&mut self, pos: usize) -> Self {
@@ -474,22 +484,22 @@ pub enum EventMergeResult {
 pub trait Changable {
     type EventType;
 
-    fn apply(&mut self, event: &Self::EventType);
+    fn apply(&mut self, event: &Self::EventType) -> Self::EventType;
 
     #[inline]
-    fn mutate(&mut self, redo: Self::EventType, undo: Self::EventType) -> Changes<Self>
+    fn mutate(&mut self, redo: Self::EventType, _undo: Self::EventType) -> BasicChange<Self>
     where
         Self: Sized,
     {
-        self.apply(&redo);
-        changes(BasicChange { redo, undo })
+        let undo = self.apply(&redo);
+        BasicChange { redo, undo }
     }
 }
 
 pub trait AtomicallyChangable: Changable + Sized {
     fn changes_mut(&mut self) -> &mut Changes<Self>;
 
-    fn begin<'a>(&'a mut self) -> Atomic<'a, Self> {
+    fn begin_changes<'a>(&'a mut self) -> Atomic<'a, Self> {
         let check_point = self.changes_mut().len();
         Atomic {
             subj: self,
@@ -523,6 +533,13 @@ pub struct Atomic<'a, T: AtomicallyChangable> {
 }
 
 impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
+    pub fn invoke<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        f(self.subj)
+    }
+
     pub fn mutate<F, E>(&mut self, f: F) -> Result<(), E>
     where
         F: FnOnce(&mut T) -> Result<Changes<T>, E>,
@@ -543,13 +560,6 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
         self.subj.changes_mut().extend_changes(changes);
 
         Ok(())
-    }
-
-    pub fn invoke<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut T) -> R,
-    {
-        f(self.subj)
     }
 
     pub fn commit(self) {
@@ -577,7 +587,7 @@ where
     {
         let mut result = Self::default();
         for e in events {
-            result.apply(e);
+            let _ignored_change = result.apply(e);
         }
 
         Ok(result)
@@ -656,7 +666,7 @@ mod tests {
         /// and causes compensation logic to restore state before
         /// the action start
         fn double_start(&mut self) -> crate::result::Result<()> {
-            let mut trx = self.begin();
+            let mut trx = self.begin_changes();
 
             trx.invoke(Self::start)?;
             trx.invoke(Self::start)?; // fail and rollback both starts
@@ -685,10 +695,12 @@ mod tests {
     impl Changable for TestEntry {
         type EventType = TestEvent;
 
-        fn apply(&mut self, event: &Self::EventType) {
+        fn apply(&mut self, event: &Self::EventType) -> Self::EventType {
             match (self.state, event) {
                 (Stopped, Started) | (Paused, Started) | (Started, Stopped) | (Started, Paused) => {
-                    self.state = *event
+                    let undo = self.state;
+                    self.state = *event;
+                    undo
                 }
                 _ => panic!("not supported"),
             }

@@ -9,6 +9,39 @@ use basic_ddd::{
     Streamable,
 };
 
+fn main() -> Result<()> {
+    let mut storage = InMemoryStorage::new();
+
+    storage.save(create_new_order(0)?)?;
+
+    let mut order42 = create_new_order(42)?;
+    storage.save(order42.clone())?;
+
+    storage.save(create_new_order(1)?)?;
+
+    // println!("storage:\n{:#?}", order42);
+    let copy = storage.load(&order42.id())?;
+
+    let _ = order42.take_changes();
+    pretty_assertions::assert_eq!(order42, copy);
+
+    println!("success!");
+    Ok(())
+}
+
+fn create_new_order(id: i32) -> Result<Order> {
+    let mut aggregate = Order::new(OrderPrimary {
+        id,
+        item_count: 777, // ignored
+    });
+    aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
+    aggregate.add_new_item(OrderItem { id: 1002 }.into())?;
+    let _may_be_added = aggregate.add_new_item(OrderItem { id: 1003 }.into());
+    assert_eq!(aggregate.item_count(), 2);
+
+    Ok(aggregate)
+}
+
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
 type OrderPrimaryEvent = PrimaryEvent<OrderPrimary>;
 type OrderItemEvent = OwnedEvent<Rc<OrderItem>>;
@@ -50,10 +83,11 @@ impl Order {
     fn new(mut primary: OrderPrimary) -> Self {
         primary.item_count = 0;
 
+        let (primary, changes) = Primary::new(primary);
         Self {
-            primary: Primary::new(primary.into()),
+            primary,
             items: Default::default(),
-            changes: Default::default(),
+            changes: changes.bubble_up(OrderEvent::Primary),
         }
     }
 
@@ -68,7 +102,7 @@ impl Order {
     fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
         let id = self.id().convert();
 
-        let mut trx = self.begin();
+        let mut trx = self.begin_changes();
 
         trx.mutate_inner(
             move |subj| subj.items.add_new(item),
@@ -107,10 +141,10 @@ impl Identifiable for Order {
 impl Changable for Order {
     type EventType = OrderEvent;
 
-    fn apply(&mut self, event: &Self::EventType) {
+    fn apply(&mut self, event: &Self::EventType) -> Self::EventType {
         match event {
-            OrderEvent::Primary(e) => self.primary.apply(e),
-            OrderEvent::Item(_id, e) => self.items.apply(e),
+            OrderEvent::Primary(e) => OrderEvent::Primary(self.primary.apply(e)),
+            OrderEvent::Item(id, e) => OrderEvent::Item(id.clone(), self.items.apply(e)),
         }
     }
 }
@@ -149,35 +183,4 @@ impl Identifiable for OrderItem {
     fn id(&self) -> Id<Self> {
         Id::new(self.id)
     }
-}
-
-fn main() -> Result<()> {
-    let mut storage = InMemoryStorage::new();
-
-    storage.save(create_new_order(0)?)?;
-    let mut order42 = create_new_order(42)?;
-    storage.save(create_new_order(1)?)?;
-
-    storage.save(order42.clone())?;
-
-    let copy = storage.load(&order42.id())?;
-
-    let _ = order42.take_changes();
-    pretty_assertions::assert_eq!(order42, copy);
-
-    println!("success!");
-    Ok(())
-}
-
-fn create_new_order(id: i32) -> Result<Order> {
-    let mut aggregate = Order::new(OrderPrimary {
-        id,
-        item_count: 777, // ignored
-    });
-    aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
-    aggregate.add_new_item(OrderItem { id: 1002 }.into())?;
-    let _may_be_added = aggregate.add_new_item(OrderItem { id: 1003 }.into());
-    assert_eq!(aggregate.item_count(), 2);
-
-    Ok(aggregate)
 }
