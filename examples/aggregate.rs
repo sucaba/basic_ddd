@@ -4,14 +4,16 @@ use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
-    AtomicallyChangable, BasicChange, BubbleUpResult, Changable, Changes, Id, Identifiable,
-    InMemoryStorage, Load, Owned, OwnedCollection, OwnedEvent, Primary, PrimaryEvent, Result, Save,
-    Stream, Streamable,
+    AtomicallyChangable, BasicChange, Changable, Changes, Error, Id, Identifiable, InMemoryStorage,
+    Load, Owned, OwnedCollection, OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream,
+    Streamable,
 };
 
 type OrderItems = OwnedCollection<Rc<OrderItem>>;
 type OrderPrimaryEvent = PrimaryEvent<OrderPrimary>;
 type OrderItemEvent = OwnedEvent<Rc<OrderItem>>;
+
+const MAX_ORDER_ITEMS: usize = 2;
 
 #[derive(Default, Debug, Eq, PartialEq, Clone)]
 struct Order
@@ -64,25 +66,33 @@ impl Order {
      * `item_count` should match `items.len()`
      */
     fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
-        // Save some state before mutations
         let id = self.id().convert();
 
         let mut trx = self.begin();
 
-        trx.mutate_inner(move |subj| {
-            subj.items
-                .add_new(item)
-                .bubble_up(|e| OrderEvent::Item(id, e))
-        })?;
+        trx.mutate_inner(
+            move |subj| subj.items.add_new(item),
+            |e| OrderEvent::Item(id, e),
+        )?;
 
-        trx.mutate_inner(|subj| {
-            subj.primary
-                .update(|p| p.item_count += 1)
-                .bubble_up(OrderEvent::Primary)
-        })?;
+        trx.mutate_inner(
+            |subj| -> Result<_> {
+                subj.validate_item_limit()?;
+                Ok(subj.primary.update(|p| p.item_count += 1)?)
+            },
+            OrderEvent::Primary,
+        )?;
 
         trx.commit();
         Ok(())
+    }
+
+    fn validate_item_limit(&self) -> Result<()> {
+        if self.primary.get().item_count == MAX_ORDER_ITEMS {
+            Err(Error::from_text("Too many".into()))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -166,6 +176,8 @@ fn create_new_order(id: i32) -> Result<Order> {
     });
     aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
     aggregate.add_new_item(OrderItem { id: 1002 }.into())?;
+    let _may_be_added = aggregate.add_new_item(OrderItem { id: 1003 }.into());
+    assert_eq!(aggregate.item_count(), 2);
 
     Ok(aggregate)
 }

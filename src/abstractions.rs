@@ -11,7 +11,7 @@ use std::vec;
 pub trait BubbleUpResult<T: Changable, E> {
     fn bubble_up<F, O: Changable>(self, f: F) -> result::Result<Changes<O>, E>
     where
-        F: Copy + Clone + Fn(T::EventType) -> O::EventType;
+        F: Clone + Fn(T::EventType) -> O::EventType;
 }
 
 impl<T: Changable, E> BubbleUpResult<T, E> for result::Result<Changes<T>, E> {
@@ -486,42 +486,6 @@ pub trait Changable {
     }
 }
 
-pub struct Atomic<'a, T: AtomicallyChangable> {
-    subj: &'a mut T,
-    check_point: usize,
-}
-
-impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
-    pub fn mutate_inner<F, E>(&mut self, f: F) -> Result<(), E>
-    where
-        F: FnOnce(&mut T) -> Result<Changes<T>, E>,
-    {
-        let changes = f(self.subj)?;
-        self.subj.changes_mut().extend_changes(changes);
-        Ok(())
-    }
-
-    pub fn invoke<F, R>(&mut self, f: F) -> R
-    where
-        F: FnOnce(&mut T) -> R,
-    {
-        f(self.subj)
-    }
-
-    pub fn commit(self) {
-        mem::forget(self)
-    }
-}
-
-impl<'a, T: AtomicallyChangable> Drop for Atomic<'a, T> {
-    fn drop(&mut self) {
-        let to_compensate = self.subj.changes_mut().take_after(self.check_point);
-        for BasicChange { undo, .. } in to_compensate.iter() {
-            self.subj.apply(&undo);
-        }
-    }
-}
-
 pub trait AtomicallyChangable: Changable + Sized {
     fn changes_mut(&mut self) -> &mut Changes<Self>;
 
@@ -551,6 +515,55 @@ pub trait Unstreamable: Changable + Default + Sized {
     where
         I: IntoIterator<Item = &'a Self::EventType>,
         Self::EventType: 'static;
+}
+
+pub struct Atomic<'a, T: AtomicallyChangable> {
+    subj: &'a mut T,
+    check_point: usize,
+}
+
+impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
+    pub fn mutate<F, E>(&mut self, f: F) -> Result<(), E>
+    where
+        F: FnOnce(&mut T) -> Result<Changes<T>, E>,
+    {
+        let changes = f(self.subj)?;
+        self.subj.changes_mut().extend_changes(changes);
+        Ok(())
+    }
+
+    pub fn mutate_inner<Inner, M, B, E>(&mut self, change_inner: M, bubble_up: B) -> Result<(), E>
+    where
+        Inner: Changable,
+        M: FnOnce(&mut T) -> Result<Changes<Inner>, E>,
+        B: Clone + Fn(Inner::EventType) -> T::EventType,
+    {
+        let inner_changes = change_inner(self.subj)?;
+        let changes = inner_changes.bubble_up(bubble_up);
+        self.subj.changes_mut().extend_changes(changes);
+
+        Ok(())
+    }
+
+    pub fn invoke<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        f(self.subj)
+    }
+
+    pub fn commit(self) {
+        mem::forget(self)
+    }
+}
+
+impl<'a, T: AtomicallyChangable> Drop for Atomic<'a, T> {
+    fn drop(&mut self) {
+        let to_compensate = self.subj.changes_mut().take_after(self.check_point);
+        for BasicChange { undo, .. } in to_compensate.iter() {
+            self.subj.apply(&undo);
+        }
+    }
 }
 
 impl<T, TEvent> Unstreamable for T
@@ -646,18 +659,25 @@ mod tests {
             let mut trx = self.begin();
 
             trx.invoke(Self::start)?;
-            trx.invoke(Self::start)?; // fail and rollback
+            trx.invoke(Self::start)?; // fail and rollback both starts
 
+            trx.commit();
             Ok(())
         }
 
         fn start(&mut self) -> Result<(), String> {
+            self.validate_not_started()?;
+
             let was = self.state;
+            self.apply(&Started);
+            self.changes.push(Started, was);
+            Ok(())
+        }
+
+        fn validate_not_started(&self) -> Result<(), String> {
             if let Started = &self.state {
                 return Err("Already started".into());
             }
-            self.apply(&Started);
-            self.changes.push(Started, was);
             Ok(())
         }
     }
@@ -694,75 +714,8 @@ mod tests {
         }
     }
 
-    /*
     #[test]
-    fn should_commit_changes() {
-        let mut changes = Changes::<TestEntry>::new();
-        changes.push(Started,);
-        let mut trx = changes.begin();
-        trx.push(Stopped);
-        trx.commit();
-
-        let changes: Vec<_> = changes.into_iter().collect();
-        assert_eq!(vec![Started, Stopped], changes);
-    }
-
-    #[test]
-    fn should_commit_changes_using_atomic_fn() {
-        let mut changes = Changes::<TestEntry>::new();
-        changes.push(Started);
-        let _ = changes.atomic(|trx| -> Result<(), ()> {
-            trx.push(Stopped);
-            Ok(())
-        });
-
-        let changes: Vec<_> = changes.into_iter().collect();
-        assert_eq!(vec![Started, Stopped], changes);
-    }
-
-    #[test]
-    fn should_implicitly_rollback_changes_using_atomic_fn() {
-        let mut changes = Changes::<TestEntry>::new();
-        changes.push(Started);
-        let _ = changes.atomic(|trx| -> Result<(), ()> {
-            trx.push(Stopped);
-            Err(())
-        });
-
-        let changes: Vec<_> = changes.into_iter().collect();
-        assert_eq!(vec![Started], changes);
-    }
-
-    #[test]
-    fn should_implicitly_rollback_changes_old() {
-        let mut changes = Changes::<TestEntry>::new();
-        changes.push(Started);
-        {
-            let mut trx = changes.begin();
-            trx.push(Stopped);
-            // implictly rolled back here
-        }
-
-        let changes: Vec<_> = changes.into_iter().collect();
-        assert_eq!(vec![Started], changes);
-    }
-
-    #[test]
-    fn should_explicitly_rollback_changes_using_atomic_fn() {
-        let mut changes = Changes::<TestEntry>::new();
-        changes.push(Started);
-        let _ = changes.atomic(|trx| -> Result<(), ()> {
-            trx.push(Stopped);
-            Err(())
-        });
-
-        let changes: Vec<_> = changes.into_iter().collect();
-        assert_eq!(vec![Started], changes);
-    }
-    */
-
-    #[test]
-    fn should_implicitly_rollback_changes_new() {
+    fn should_implicitly_rollback_changes() {
         let mut sut = TestEntry {
             state: Stopped,
             changes: vec![BasicChange {
@@ -773,9 +726,10 @@ mod tests {
             .collect(),
         };
 
-        let r: crate::result::Result<()> = sut.double_start();
-        let r2: crate::result::Result<()> = Err("Already started".to_string().into());
-        assert_eq!(r, r2);
+        assert_eq!(
+            sut.double_start(),
+            Err("Already started".to_string().into())
+        );
 
         assert_eq!(Stopped, sut.state);
 
