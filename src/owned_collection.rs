@@ -280,7 +280,7 @@ where
      */
     pub fn update(&mut self, item: T) -> StdResult<Changes<Self>, NotFound<T>> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
-            Ok(Changes::once(self.mutate(Updated(pos, item))))
+            Ok(Changes::only(self.mutate(Updated(pos, item))))
         } else {
             Err(NotFound(item))
         }
@@ -293,7 +293,7 @@ where
     pub fn add_new(&mut self, item: T) -> StdResult<Changes<Self>, AlreadyExists<T>> {
         let id = item.get_id();
         if let None = self.position_by_id(&id) {
-            Ok(Changes::once(self.mutate(Created(item))))
+            Ok(Changes::only(self.mutate(Created(item))))
         } else {
             Err(AlreadyExists(item))
         }
@@ -319,7 +319,7 @@ where
         id: &'a Id<T::IdentifiableType>,
     ) -> StdResult<Changes<Self>, NotFound<&'a Id<T::IdentifiableType>>> {
         if let Some(_) = self.position_by_id(id) {
-            Ok(Changes::once(self.mutate(Deleted(id.clone()))))
+            Ok(Changes::only(self.mutate(Deleted(id.clone()))))
         } else {
             Err(NotFound(id))
         }

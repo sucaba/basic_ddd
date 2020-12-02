@@ -99,7 +99,7 @@ impl<T: Changable> Changes<T> {
         }
     }
 
-    pub fn once(item: BasicChange<T>) -> Self {
+    pub fn only(item: BasicChange<T>) -> Self {
         Self {
             inner: SmallList::once(item),
         }
