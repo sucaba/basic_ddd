@@ -141,10 +141,10 @@ impl Identifiable for Order {
 impl Changable for Order {
     type EventType = OrderEvent;
 
-    fn apply(&mut self, event: &Self::EventType) -> Self::EventType {
+    fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
             OrderEvent::Primary(e) => OrderEvent::Primary(self.primary.apply(e)),
-            OrderEvent::Item(id, e) => OrderEvent::Item(id.clone(), self.items.apply(e)),
+            OrderEvent::Item(id, e) => OrderEvent::Item(id, self.items.apply(e)),
         }
     }
 }

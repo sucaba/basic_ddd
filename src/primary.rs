@@ -107,6 +107,7 @@ where
 impl<T: GetId> Primary<T>
 where
     PrimaryEvent<T>: Sized,
+    Id<<T as GetId>::IdentifiableType>: Clone,
 {
     pub fn new(row: T) -> (Self, Changes<Self>)
     where
@@ -180,14 +181,15 @@ where
 {
     type EventType = PrimaryEvent<T>;
 
-    fn apply(&mut self, event: &Self::EventType) -> Self::EventType {
+    fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
             Created(x) => {
-                self.inner = Some(x.clone());
-                Deleted(x.get_id())
+                let id = x.get_id();
+                self.inner = Some(x);
+                Deleted(id)
             }
             Updated(x) => {
-                let old = self.inner.replace(x.clone());
+                let old = self.inner.replace(x);
                 Updated(old.expect("Dev err: update before create"))
             }
             Deleted(_) => {

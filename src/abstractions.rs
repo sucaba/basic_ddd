@@ -492,14 +492,15 @@ pub enum EventMergeResult {
 pub trait Changable {
     type EventType;
 
-    fn apply(&mut self, event: &Self::EventType) -> Self::EventType;
+    fn apply(&mut self, event: Self::EventType) -> Self::EventType;
 
     #[inline]
     fn mutate(&mut self, event: Self::EventType) -> BasicChange<Self>
     where
+        Self::EventType: Clone,
         Self: Sized,
     {
-        let undo = self.apply(&event);
+        let undo = self.apply(event.clone());
         BasicChange { redo: event, undo }
     }
 }
@@ -531,8 +532,7 @@ pub trait Streamable: Changable {
 pub trait Unstreamable: Changable + Default + Sized {
     fn load<'a, I>(events: I) -> crate::result::Result<Self>
     where
-        I: IntoIterator<Item = &'a Self::EventType>,
-        Self::EventType: 'static;
+        I: IntoIterator<Item = Self::EventType>;
 }
 
 pub struct Atomic<'a, T: AtomicallyChangable> {
@@ -579,8 +579,8 @@ impl<'a, T: AtomicallyChangable> Drop for Atomic<'a, T> {
     fn drop(&mut self) {
         let mut to_compensate = self.subj.changes_mut().take_after(self.check_point);
         to_compensate.reverse();
-        for BasicChange { undo, .. } in to_compensate.iter() {
-            self.subj.apply(&undo);
+        for BasicChange { undo, .. } in to_compensate {
+            self.subj.apply(undo);
         }
     }
 }
@@ -589,10 +589,9 @@ impl<T, TEvent> Unstreamable for T
 where
     T: Sized + Default + Changable<EventType = TEvent>,
 {
-    fn load<'a, I>(events: I) -> crate::result::Result<Self>
+    fn load<I>(events: I) -> crate::result::Result<Self>
     where
-        I: IntoIterator<Item = &'a Self::EventType>,
-        Self::EventType: 'static,
+        I: IntoIterator<Item = Self::EventType>,
     {
         let mut result = Self::default();
         for e in events {
@@ -688,7 +687,7 @@ mod tests {
             self.validate_not_started()?;
 
             let was = self.state;
-            self.apply(&Started);
+            self.apply(Started);
             self.changes.push(Started, was);
             Ok(())
         }
@@ -704,11 +703,11 @@ mod tests {
     impl Changable for TestEntry {
         type EventType = TestEvent;
 
-        fn apply(&mut self, event: &Self::EventType) -> Self::EventType {
+        fn apply(&mut self, event: Self::EventType) -> Self::EventType {
             match (self.state, event) {
                 (Stopped, Started) | (Paused, Started) | (Started, Stopped) | (Started, Paused) => {
                     let undo = self.state;
-                    self.state = *event;
+                    self.state = event;
                     undo
                 }
                 _ => panic!("not supported"),

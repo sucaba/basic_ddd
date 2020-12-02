@@ -180,6 +180,7 @@ where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
+    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
 {
     fn default() -> Self {
         Self::new()
@@ -223,21 +224,23 @@ where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
+    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
 {
     type EventType = OwnedEvent<T>;
 
-    fn apply(&mut self, event: &Self::EventType) -> Self::EventType {
+    fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
             Created(x) => {
-                self.inner.push(x.clone());
-                Deleted(x.get_id())
+                let id = x.get_id();
+                self.inner.push(x);
+                Deleted(id)
             }
             Updated(pos, x) => {
-                let old = mem::replace(&mut self.inner[*pos], x.clone());
-                Updated(*pos, old)
+                let old = mem::replace(&mut self.inner[pos], x);
+                Updated(pos, old)
             }
             Deleted(id) => {
-                let i = self.position_by_id(id).expect("Dev error: id not found");
+                let i = self.position_by_id(&id).expect("Dev error: id not found");
                 let old = self.inner.remove(i);
                 Created(old)
             }
@@ -250,6 +253,7 @@ where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
+    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
 {
     pub fn new() -> Self {
         Self {
@@ -475,6 +479,7 @@ mod owned_collection_tests {
         T: GetId + Clone,
         T::IdentifiableType: Owned,
         Id<T::IdentifiableType>: hash::Hash + Clone + Ord,
+        Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
     {
         events.sort_by_key(|BasicChange { redo, .. }| OwnedEvent::get_id(&redo));
         events

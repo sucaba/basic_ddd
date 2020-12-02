@@ -25,7 +25,7 @@ impl<T: Identifiable, TEvent> EventEnvelope<T, TEvent> {
 
 impl<T, TEvent> Clone for EventEnvelope<T, TEvent>
 where
-    T: Streamable<EventType = TEvent> + Identifiable,
+    T: Identifiable,
     Id<T>: Clone,
     TEvent: Clone,
 {
@@ -47,25 +47,28 @@ where
 impl<T, TEvent> InMemoryStorage<T, TEvent>
 where
     T: Changable<EventType = TEvent> + Identifiable,
-    TEvent: 'static + std::fmt::Debug + Clone,
     Id<T>: Clone,
 {
     pub fn new() -> Self {
         Self { events: Vec::new() }
     }
 
-    fn select_events<'a>(&'a self, id: &'a Id<T>) -> impl 'a + Iterator<Item = &TEvent> {
+    fn select_events<'a>(&'a self, id: &'a Id<T>) -> impl 'a + Iterator<Item = TEvent>
+    where
+        TEvent: Clone,
+    {
         self.events
             .iter()
             .filter(move |x| &x.id == id)
             .map(|x| &x.event)
+            .cloned()
     }
 }
 
 impl<T, TEvent> Load<T> for InMemoryStorage<T, TEvent>
 where
     T: Unstreamable<EventType = TEvent> + Identifiable,
-    TEvent: 'static + std::fmt::Debug + Clone,
+    TEvent: Clone,
     Id<T>: Clone,
 {
     fn load(&mut self, id: &Id<T>) -> Result<T> {
