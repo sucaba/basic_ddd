@@ -109,6 +109,10 @@ impl<T: Changable> Changes<T> {
         self.inner.len()
     }
 
+    pub fn reverse(&mut self) {
+        self.inner.reverse();
+    }
+
     pub fn iter(&self) -> std::slice::Iter<'_, BasicChange<T>> {
         self.inner.iter()
     }
@@ -263,6 +267,10 @@ impl<T> SmallList<T> {
         Self {
             inner: self.inner.drain(pos..).collect(),
         }
+    }
+
+    pub fn reverse(&mut self) {
+        self.inner.reverse();
     }
 
     pub fn drain<R>(&mut self, range: R) -> vec::Drain<'_, T>
@@ -569,7 +577,8 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
 
 impl<'a, T: AtomicallyChangable> Drop for Atomic<'a, T> {
     fn drop(&mut self) {
-        let to_compensate = self.subj.changes_mut().take_after(self.check_point);
+        let mut to_compensate = self.subj.changes_mut().take_after(self.check_point);
+        to_compensate.reverse();
         for BasicChange { undo, .. } in to_compensate.iter() {
             self.subj.apply(&undo);
         }
