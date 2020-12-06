@@ -134,7 +134,7 @@ where
     where
         T: Clone,
     {
-        Changes::only(self.mutate(Created(row)))
+        Changes::from_application(Created(row), self)
     }
 
     pub fn set(&mut self, row: T) -> StdResult<Changes<Self>, NotFound<T>>
@@ -142,7 +142,7 @@ where
         T: Clone,
     {
         if let Some(_) = &self.inner {
-            Ok(Changes::only(self.mutate(Updated(row))))
+            Ok(Changes::from_application(Updated(row), self))
         } else {
             Err(NotFound(row))
         }
@@ -156,7 +156,7 @@ where
         if let Some(existing) = &self.inner {
             let mut modified = existing.clone();
             f(&mut modified);
-            Ok(Changes::only(self.mutate(Updated(modified))))
+            Ok(Changes::from_application(Updated(modified), self))
         } else {
             Err(NotFound(()))
         }
@@ -168,7 +168,7 @@ where
     {
         if let Some(existing) = &self.inner {
             let id = existing.get_id();
-            Ok(Changes::only(self.mutate(Deleted(id))))
+            Ok(Changes::from_application(Deleted(id), self))
         } else {
             Err(NotFound(()))
         }
@@ -178,8 +178,10 @@ where
 impl<T> Changable for Primary<T>
 where
     T: GetId + Clone,
+    Id<T::IdentifiableType>: Clone,
 {
     type EventType = PrimaryEvent<T>;
+    type ChangeUnit = BasicChange<Self>;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {

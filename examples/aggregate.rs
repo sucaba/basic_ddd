@@ -140,6 +140,7 @@ impl Identifiable for Order {
 
 impl Changable for Order {
     type EventType = OrderEvent;
+    type ChangeUnit = BasicChange<Self>;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {

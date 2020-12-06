@@ -99,7 +99,15 @@ impl<T: Changable> Changes<T> {
         }
     }
 
-    pub fn only(item: BasicChange<T>) -> Self {
+    pub fn from_application(redo: T::EventType, subj: &mut T) -> Self
+    where
+        T::EventType: Clone,
+    {
+        let undo = subj.apply(redo.clone());
+        Self::only(BasicChange { redo, undo })
+    }
+
+    fn only(item: BasicChange<T>) -> Self {
         Self {
             inner: SmallList::once(item),
         }
@@ -489,19 +497,24 @@ pub enum EventMergeResult {
     Annihilated,
 }
 
-pub trait Changable {
+pub trait Changable: Sized {
     type EventType;
+    type ChangeUnit: ChangeUnit<Self>;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType;
+}
 
-    #[inline]
-    fn mutate(&mut self, event: Self::EventType) -> BasicChange<Self>
-    where
-        Self::EventType: Clone,
-        Self: Sized,
-    {
-        let undo = self.apply(event.clone());
-        BasicChange { redo: event, undo }
+pub trait ChangeUnit<T: Changable> {
+    fn from_application(event: T::EventType, subj: &mut T) -> Self;
+}
+
+impl<T: Changable> ChangeUnit<T> for BasicChange<T>
+where
+    T::EventType: Clone,
+{
+    fn from_application(redo: T::EventType, subj: &mut T) -> Self {
+        let undo = subj.apply(redo.clone());
+        Self { redo, undo }
     }
 }
 
@@ -702,6 +715,7 @@ mod tests {
 
     impl Changable for TestEntry {
         type EventType = TestEvent;
+        type ChangeUnit = BasicChange<Self>;
 
         fn apply(&mut self, event: Self::EventType) -> Self::EventType {
             match (self.state, event) {
