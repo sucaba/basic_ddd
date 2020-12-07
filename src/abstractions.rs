@@ -149,7 +149,6 @@ pub enum EventMergeResult {
 
 pub trait Changable: Sized {
     type EventType;
-    type ChangeUnit: ChangeUnit<Self>;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType;
 }
@@ -351,7 +350,6 @@ mod tests {
 
     impl Changable for TestEntry {
         type EventType = TestEvent;
-        type ChangeUnit = BasicChange<Self>;
 
         fn apply(&mut self, event: Self::EventType) -> Self::EventType {
             match (self.state, event) {

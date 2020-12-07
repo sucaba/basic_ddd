@@ -182,7 +182,6 @@ where
     Id<T::IdentifiableType>: Clone,
 {
     type EventType = PrimaryEvent<T>;
-    type ChangeUnit = BasicChange<Self>;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {

@@ -228,7 +228,6 @@ where
     Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
 {
     type EventType = OwnedEvent<T>;
-    type ChangeUnit = BasicChange<Self>;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
