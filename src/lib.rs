@@ -3,7 +3,6 @@ mod changes;
 mod owned_collection;
 mod primary;
 pub mod result;
-mod smalllist;
 mod storage;
 mod test_utils;
 

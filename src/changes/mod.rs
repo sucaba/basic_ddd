@@ -1,3 +1,5 @@
+mod smalllist;
+
 use crate::abstractions::*;
 use std::fmt;
 use std::fmt::Debug;
@@ -5,7 +7,7 @@ use std::ops;
 use std::result;
 use std::vec;
 
-use crate::smalllist::SmallList;
+use smalllist::SmallList;
 
 pub trait BubbleUpResult<T: Changable, E> {
     fn bubble_up<F, O: Changable>(self, f: F) -> result::Result<Changes<O>, E>
