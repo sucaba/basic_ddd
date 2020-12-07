@@ -6,7 +6,7 @@ use std::rc::Rc;
 use basic_ddd::{
     AtomicallyChangable, BasicChange, Changable, Changes, Error, Id, Identifiable, InMemoryStorage,
     Load, Owned, OwnedCollection, OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream,
-    Streamable,
+    Streamable, UndoManager,
 };
 
 fn main() -> Result<()> {
@@ -56,7 +56,7 @@ where
     primary: Primary<OrderPrimary>,
     items: OwnedCollection<Rc<OrderItem>>,
 
-    changes: Changes<Order>,
+    changes: UndoManager<Order>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -84,10 +84,11 @@ impl Order {
         primary.item_count = 0;
 
         let (primary, changes) = Primary::new(primary);
+        let top_changes: Changes<Order> = changes.bubble_up(OrderEvent::Primary);
         Self {
             primary,
             items: Default::default(),
-            changes: changes.bubble_up(OrderEvent::Primary),
+            changes: top_changes.into(),
         }
     }
 
@@ -150,7 +151,7 @@ impl Changable for Order {
 }
 
 impl AtomicallyChangable for Order {
-    fn changes_mut(&mut self) -> &mut Changes<Self> {
+    fn undomanager_mut(&mut self) -> &mut UndoManager<Self> {
         &mut self.changes
     }
 }

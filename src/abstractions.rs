@@ -154,10 +154,10 @@ pub trait Changable: Sized {
 }
 
 pub trait AtomicallyChangable: Changable + Sized {
-    fn changes_mut(&mut self) -> &mut Changes<Self>;
+    fn undomanager_mut(&mut self) -> &mut UndoManager<Self>;
 
     fn begin_changes<'a>(&'a mut self) -> Atomic<'a, Self> {
-        let check_point = self.changes_mut().len();
+        let check_point = self.undomanager_mut().len();
         Atomic {
             subj: self,
             check_point,
@@ -201,7 +201,7 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
         F: FnOnce(&mut T) -> Result<Changes<T>, E>,
     {
         let changes = f(self.subj)?;
-        self.subj.changes_mut().extend_changes(changes);
+        self.subj.undomanager_mut().extend_changes(changes);
         Ok(())
     }
 
@@ -213,7 +213,7 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
     {
         let inner_changes = change_inner(self.subj)?;
         let changes = inner_changes.bubble_up(bubble_up);
-        self.subj.changes_mut().extend_changes(changes);
+        self.subj.undomanager_mut().extend_changes(changes);
 
         Ok(())
     }
@@ -225,7 +225,7 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
 
 impl<'a, T: AtomicallyChangable> Drop for Atomic<'a, T> {
     fn drop(&mut self) {
-        let mut to_compensate = self.subj.changes_mut().take_after(self.check_point);
+        let mut to_compensate = self.subj.undomanager_mut().take_after(self.check_point);
         to_compensate.reverse();
         for BasicChange { undo, .. } in to_compensate {
             self.subj.apply(undo);
@@ -307,7 +307,7 @@ mod tests {
     #[derive(Debug, Eq, PartialEq)]
     struct TestEntry {
         state: TestEvent,
-        changes: Changes<TestEntry>,
+        changes: UndoManager<TestEntry>,
     }
 
     #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -364,7 +364,7 @@ mod tests {
     }
 
     impl AtomicallyChangable for TestEntry {
-        fn changes_mut(&mut self) -> &mut Changes<Self> {
+        fn undomanager_mut(&mut self) -> &mut UndoManager<Self> {
             &mut self.changes
         }
     }

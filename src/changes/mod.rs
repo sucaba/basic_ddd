@@ -1,12 +1,13 @@
 mod smalllist;
+mod undomanager;
 
 use crate::abstractions::*;
+use smalllist::SmallList;
 use std::fmt;
 use std::fmt::Debug;
 use std::ops;
 use std::vec;
-
-use smalllist::SmallList;
+pub use undomanager::*;
 
 pub struct BasicChange<T: Changable> {
     pub redo: T::EventType,
@@ -110,10 +111,6 @@ impl<T: Changable> Changes<T> {
 
     pub fn len(&self) -> usize {
         self.inner.len()
-    }
-
-    pub fn reverse(&mut self) {
-        self.inner.reverse();
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, BasicChange<T>> {
