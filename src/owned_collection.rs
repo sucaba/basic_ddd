@@ -1,5 +1,6 @@
 // TODO: Remove std::hash references
 use super::abstractions::*;
+use crate::changes::*;
 use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
 use std::fmt;

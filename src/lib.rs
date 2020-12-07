@@ -1,11 +1,14 @@
 mod abstractions;
+mod changes;
 mod owned_collection;
 mod primary;
 pub mod result;
+mod smalllist;
 mod storage;
 mod test_utils;
 
 pub use abstractions::*;
+pub use changes::*;
 pub use owned_collection::*;
 pub use primary::*;
 pub use result::*;
