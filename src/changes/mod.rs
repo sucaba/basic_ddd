@@ -4,29 +4,9 @@ use crate::abstractions::*;
 use std::fmt;
 use std::fmt::Debug;
 use std::ops;
-use std::result;
 use std::vec;
 
 use smalllist::SmallList;
-
-pub trait BubbleUpResult<T: Changable, E> {
-    fn bubble_up<F, O: Changable>(self, f: F) -> result::Result<Changes<O>, E>
-    where
-        F: Clone + Fn(T::EventType) -> O::EventType;
-}
-
-impl<T: Changable, E> BubbleUpResult<T, E> for result::Result<Changes<T>, E> {
-    fn bubble_up<F, O: Changable>(self, f: F) -> result::Result<Changes<O>, E>
-    where
-        F: Clone + Fn(T::EventType) -> O::EventType,
-    {
-        self.map(|x| x.bubble_up(f))
-    }
-}
-
-pub fn changes<T: Changable>(event: BasicChange<T>) -> Changes<T> {
-    std::iter::once(event).collect()
-}
 
 pub struct BasicChange<T: Changable> {
     pub redo: T::EventType,
