@@ -9,7 +9,7 @@ use std::ops;
 use std::rc::Rc;
 
 pub struct UndoManager<T: Changable> {
-    inner: Record<T>,
+    inner: Record<BasicChange<T>>,
 }
 
 impl<T: Changable> fmt::Debug for UndoManager<T>
@@ -54,13 +54,13 @@ impl<T: Changable> UndoManager<T> {
     }
 
     pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
-        self.inner.push(redo, undo)
+        self.inner.push(BasicChange { redo, undo })
     }
 }
 
 impl<T: Changable> ExtendChanges<T> for UndoManager<T> {
     fn extend_changes<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
-        self.inner.extend_changes(iter)
+        self.inner.extend(iter)
     }
 }
 
@@ -76,7 +76,7 @@ where
 impl<T: Changable> From<Changes<T>> for UndoManager<T> {
     fn from(changes: Changes<T>) -> Self {
         Self {
-            inner: changes.into(),
+            inner: changes.into_iter().collect(),
         }
     }
 }

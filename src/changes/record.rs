@@ -1,14 +1,13 @@
-use super::{BasicChange, Changes, ExtendChanges};
-use crate::abstractions::*;
 use std::fmt;
 use std::fmt::Debug;
+use std::iter;
 use std::ops;
 
-pub struct Record<T: Changable> {
-    inner: Vec<BasicChange<T>>,
+pub struct Record<T> {
+    inner: Vec<T>,
 }
 
-impl<T: Changable> Record<T> {
+impl<T> Record<T> {
     pub fn new() -> Self {
         Record { inner: Vec::new() }
     }
@@ -21,50 +20,42 @@ impl<T: Changable> Record<T> {
         self.inner.reverse();
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, BasicChange<T>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
         self.inner.iter()
     }
 
-    pub fn take_after(&mut self, pos: usize) -> impl Iterator<Item = BasicChange<T>> + '_ {
+    pub fn take_after(&mut self, pos: usize) -> impl Iterator<Item = T> + '_ {
         self.inner.drain(pos..)
     }
 
-    pub fn drain<R>(&mut self, range: R) -> impl Iterator<Item = BasicChange<T>> + '_
+    pub fn drain<R>(&mut self, range: R) -> impl Iterator<Item = T> + '_
     where
         R: ops::RangeBounds<usize>,
     {
         self.inner.drain(range)
     }
 
-    pub fn to(self, dest: &mut Self) {
-        dest.extend_changes(self)
+    pub fn push(&mut self, entry: T) {
+        self.inner.push(entry)
     }
 
-    pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
-        self.inner.push(BasicChange { redo, undo })
-    }
-
-    pub fn map<F, O: Changable>(self, f: F) -> Record<O>
+    pub fn map<F, O>(self, f: F) -> Record<O>
     where
-        F: Fn(BasicChange<T>) -> BasicChange<O>,
+        F: Fn(T) -> O,
     {
         self.into_iter().map(f).collect::<Record<O>>()
     }
+}
 
-    pub fn bubble_up<F, O: Changable>(self, f: F) -> Record<O>
-    where
-        F: Clone + Fn(T::EventType) -> O::EventType,
-    {
-        self.into_iter()
-            .map(move |ch| ch.bubble_up(f.clone()))
-            .collect()
+impl<T> iter::Extend<T> for Record<T> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        self.inner.extend(iter)
     }
 }
 
 impl<T, I> std::ops::Index<I> for Record<T>
 where
-    T: Changable,
-    I: std::slice::SliceIndex<[BasicChange<T>]>,
+    I: std::slice::SliceIndex<[T]>,
 {
     type Output = I::Output;
 
@@ -73,15 +64,15 @@ where
     }
 }
 
-impl<T: Changable> Default for Record<T> {
+impl<T> Default for Record<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Changable> Clone for Record<T>
+impl<T> Clone for Record<T>
 where
-    T::EventType: Clone,
+    T: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -90,20 +81,20 @@ where
     }
 }
 
-impl<T: Changable> PartialEq for Record<T>
+impl<T> PartialEq for Record<T>
 where
-    T::EventType: PartialEq,
+    T: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         PartialEq::eq(&self.inner, &other.inner)
     }
 }
 
-impl<T: Changable> Eq for Record<T> where T::EventType: Eq {}
+impl<T> Eq for Record<T> where T: Eq {}
 
-impl<T: Changable> Debug for Record<T>
+impl<T> Debug for Record<T>
 where
-    T::EventType: Debug,
+    T: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("UndoManager")
@@ -112,39 +103,25 @@ where
     }
 }
 
-impl<T: Changable> ExtendChanges<T> for Record<T> {
-    fn extend_changes<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
-        self.inner.extend(iter)
-    }
-}
-
-impl<T: Changable> Into<Vec<BasicChange<T>>> for Record<T> {
-    fn into(self) -> Vec<BasicChange<T>> {
+impl<T> Into<Vec<T>> for Record<T> {
+    fn into(self) -> Vec<T> {
         self.inner.into_iter().collect()
     }
 }
 
-impl<T: Changable> std::iter::FromIterator<BasicChange<T>> for Record<T> {
-    fn from_iter<I: IntoIterator<Item = BasicChange<T>>>(iter: I) -> Self {
+impl<T> std::iter::FromIterator<T> for Record<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Self {
             inner: iter.into_iter().collect(),
         }
     }
 }
 
-impl<T: Changable> std::iter::IntoIterator for Record<T> {
-    type Item = BasicChange<T>;
-    type IntoIter = <Vec<BasicChange<T>> as std::iter::IntoIterator>::IntoIter;
+impl<T> std::iter::IntoIterator for Record<T> {
+    type Item = T;
+    type IntoIter = <Vec<T> as std::iter::IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()
-    }
-}
-
-impl<T: Changable> From<Changes<T>> for Record<T> {
-    fn from(changes: Changes<T>) -> Self {
-        Self {
-            inner: changes.inner.into_iter().collect(),
-        }
     }
 }
