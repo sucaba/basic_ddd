@@ -44,7 +44,7 @@ impl<T> Record<T> {
     where
         F: Fn(T) -> O,
     {
-        self.into_iter().map(f).collect::<Record<O>>()
+        self.into_iter().map(f).collect()
     }
 }
 
