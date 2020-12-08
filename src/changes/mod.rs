@@ -1,11 +1,11 @@
+mod record;
 mod smalllist;
-mod undomanager;
 
 use crate::abstractions::*;
+pub use record::*;
 use smalllist::SmallList;
 use std::fmt;
 use std::fmt::Debug;
-pub use undomanager::*;
 
 pub struct BasicChange<T: Changable> {
     pub redo: T::EventType,
@@ -163,6 +163,21 @@ pub trait ExtendChanges<O: Changable> {
     where
         I: IntoIterator<Item = BasicChange<O>>;
 }
+
+/*
+impl<O, TEvent> ExtendChanges<O> for O
+where
+    O: Changable<EventType = TEvent>,
+    O: Extend<BasicChange<T>,
+{
+    fn extend_changes<I>(&mut self, iter: I)
+    where
+        I: IntoIterator<Item = BasicChange<O>>,
+    {
+        self.extend(iter)
+    }
+}
+*/
 
 impl<T: Changable> Default for Changes<T> {
     fn default() -> Self {

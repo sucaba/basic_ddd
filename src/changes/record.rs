@@ -4,13 +4,13 @@ use std::fmt;
 use std::fmt::Debug;
 use std::ops;
 
-pub struct UndoManager<T: Changable> {
+pub struct Record<T: Changable> {
     inner: Vec<BasicChange<T>>,
 }
 
-impl<T: Changable> UndoManager<T> {
+impl<T: Changable> Record<T> {
     pub fn new() -> Self {
-        UndoManager { inner: Vec::new() }
+        Record { inner: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -44,14 +44,14 @@ impl<T: Changable> UndoManager<T> {
         self.inner.push(BasicChange { redo, undo })
     }
 
-    pub fn map<F, O: Changable>(self, f: F) -> UndoManager<O>
+    pub fn map<F, O: Changable>(self, f: F) -> Record<O>
     where
         F: Fn(BasicChange<T>) -> BasicChange<O>,
     {
-        self.into_iter().map(f).collect::<UndoManager<O>>()
+        self.into_iter().map(f).collect::<Record<O>>()
     }
 
-    pub fn bubble_up<F, O: Changable>(self, f: F) -> UndoManager<O>
+    pub fn bubble_up<F, O: Changable>(self, f: F) -> Record<O>
     where
         F: Clone + Fn(T::EventType) -> O::EventType,
     {
@@ -61,7 +61,7 @@ impl<T: Changable> UndoManager<T> {
     }
 }
 
-impl<T, I> std::ops::Index<I> for UndoManager<T>
+impl<T, I> std::ops::Index<I> for Record<T>
 where
     T: Changable,
     I: std::slice::SliceIndex<[BasicChange<T>]>,
@@ -73,13 +73,13 @@ where
     }
 }
 
-impl<T: Changable> Default for UndoManager<T> {
+impl<T: Changable> Default for Record<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Changable> Clone for UndoManager<T>
+impl<T: Changable> Clone for Record<T>
 where
     T::EventType: Clone,
 {
@@ -90,7 +90,7 @@ where
     }
 }
 
-impl<T: Changable> PartialEq for UndoManager<T>
+impl<T: Changable> PartialEq for Record<T>
 where
     T::EventType: PartialEq,
 {
@@ -99,9 +99,9 @@ where
     }
 }
 
-impl<T: Changable> Eq for UndoManager<T> where T::EventType: Eq {}
+impl<T: Changable> Eq for Record<T> where T::EventType: Eq {}
 
-impl<T: Changable> Debug for UndoManager<T>
+impl<T: Changable> Debug for Record<T>
 where
     T::EventType: Debug,
 {
@@ -112,19 +112,19 @@ where
     }
 }
 
-impl<T: Changable> ExtendChanges<T> for UndoManager<T> {
+impl<T: Changable> ExtendChanges<T> for Record<T> {
     fn extend_changes<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
         self.inner.extend(iter)
     }
 }
 
-impl<T: Changable> Into<Vec<BasicChange<T>>> for UndoManager<T> {
+impl<T: Changable> Into<Vec<BasicChange<T>>> for Record<T> {
     fn into(self) -> Vec<BasicChange<T>> {
         self.inner.into_iter().collect()
     }
 }
 
-impl<T: Changable> std::iter::FromIterator<BasicChange<T>> for UndoManager<T> {
+impl<T: Changable> std::iter::FromIterator<BasicChange<T>> for Record<T> {
     fn from_iter<I: IntoIterator<Item = BasicChange<T>>>(iter: I) -> Self {
         Self {
             inner: iter.into_iter().collect(),
@@ -132,7 +132,7 @@ impl<T: Changable> std::iter::FromIterator<BasicChange<T>> for UndoManager<T> {
     }
 }
 
-impl<T: Changable> std::iter::IntoIterator for UndoManager<T> {
+impl<T: Changable> std::iter::IntoIterator for Record<T> {
     type Item = BasicChange<T>;
     type IntoIter = <Vec<BasicChange<T>> as std::iter::IntoIterator>::IntoIter;
 
@@ -141,7 +141,7 @@ impl<T: Changable> std::iter::IntoIterator for UndoManager<T> {
     }
 }
 
-impl<T: Changable> From<Changes<T>> for UndoManager<T> {
+impl<T: Changable> From<Changes<T>> for Record<T> {
     fn from(changes: Changes<T>) -> Self {
         Self {
             inner: changes.inner.into_iter().collect(),

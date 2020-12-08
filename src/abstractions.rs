@@ -1,16 +1,126 @@
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 
 use crate::changes::*;
+use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::mem;
-
+use std::ops;
 use std::rc::Rc;
+
+pub struct UndoManager<T: Changable> {
+    inner: Record<T>,
+}
+
+impl<T: Changable> fmt::Debug for UndoManager<T>
+where
+    T::EventType: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("UndoManager")
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
+impl<T: Changable> UndoManager<T> {
+    pub fn new() -> Self {
+        UndoManager {
+            inner: Record::new(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn reverse(&mut self) {
+        self.inner.reverse();
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, BasicChange<T>> {
+        self.inner.iter()
+    }
+
+    pub fn take_after(&mut self, pos: usize) -> impl Iterator<Item = BasicChange<T>> + '_ {
+        self.inner.take_after(pos)
+    }
+
+    pub fn drain<'a, R>(&'a mut self, range: R) -> impl Iterator<Item = BasicChange<T>> + 'a
+    where
+        R: ops::RangeBounds<usize> + 'a,
+    {
+        self.inner.drain(range)
+    }
+
+    pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
+        self.inner.push(redo, undo)
+    }
+}
+
+impl<T: Changable> ExtendChanges<T> for UndoManager<T> {
+    fn extend_changes<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
+        self.inner.extend_changes(iter)
+    }
+}
+
+impl<T: Changable> PartialEq for UndoManager<T>
+where
+    T::EventType: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        PartialEq::eq(&self.inner, &other.inner)
+    }
+}
+
+impl<T: Changable> From<Changes<T>> for UndoManager<T> {
+    fn from(changes: Changes<T>) -> Self {
+        Self {
+            inner: changes.into(),
+        }
+    }
+}
+
+impl<T: Changable> Eq for UndoManager<T> where T::EventType: Eq {}
 
 pub trait Identifiable: Sized {
     type IdType: Eq;
 
     fn id(&self) -> Id<Self>;
+}
+
+impl<T: Changable> Default for UndoManager<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: Changable> Clone for UndoManager<T>
+where
+    T::EventType: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<T: Changable> std::iter::FromIterator<BasicChange<T>> for UndoManager<T> {
+    fn from_iter<I: IntoIterator<Item = BasicChange<T>>>(iter: I) -> Self {
+        Self {
+            inner: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl<T: Changable> std::iter::IntoIterator for UndoManager<T> {
+    type Item = BasicChange<T>;
+    type IntoIter = <Vec<BasicChange<T>> as std::iter::IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
 }
 
 pub trait GetId {
