@@ -56,10 +56,8 @@ impl<T: Changable> UndoManager<T> {
     pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
         self.inner.push(BasicChange { redo, undo })
     }
-}
 
-impl<T: Changable> ExtendChanges<T> for UndoManager<T> {
-    fn extend_changes<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
+    pub fn append<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
         self.inner.extend(iter)
     }
 }
@@ -311,7 +309,7 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
         F: FnOnce(&mut T) -> Result<Changes<T>, E>,
     {
         let changes = f(self.subj)?;
-        self.subj.undomanager_mut().extend_changes(changes);
+        self.subj.undomanager_mut().append(changes);
         Ok(())
     }
 
@@ -323,7 +321,7 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
     {
         let inner_changes = change_inner(self.subj)?;
         let changes = inner_changes.bubble_up(bubble_up);
-        self.subj.undomanager_mut().extend_changes(changes);
+        self.subj.undomanager_mut().append(changes);
 
         Ok(())
     }

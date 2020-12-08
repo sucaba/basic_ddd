@@ -122,7 +122,7 @@ impl<T: Changable> Changes<T> {
     }
 
     pub fn to(self, dest: &mut Self) {
-        dest.extend_changes(self)
+        dest.append(self)
     }
 
     pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
@@ -144,6 +144,10 @@ impl<T: Changable> Changes<T> {
             .map(move |ch| ch.bubble_up(f.clone()))
             .collect::<Changes<O>>()
     }
+
+    pub fn append<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
+        self.inner.extend(iter)
+    }
 }
 
 impl<T, I> std::ops::Index<I> for Changes<T>
@@ -157,27 +161,6 @@ where
         self.inner.index(index)
     }
 }
-
-pub trait ExtendChanges<O: Changable> {
-    fn extend_changes<I>(&mut self, iter: I)
-    where
-        I: IntoIterator<Item = BasicChange<O>>;
-}
-
-/*
-impl<O, TEvent> ExtendChanges<O> for O
-where
-    O: Changable<EventType = TEvent>,
-    O: Extend<BasicChange<T>,
-{
-    fn extend_changes<I>(&mut self, iter: I)
-    where
-        I: IntoIterator<Item = BasicChange<O>>,
-    {
-        self.extend(iter)
-    }
-}
-*/
 
 impl<T: Changable> Default for Changes<T> {
     fn default() -> Self {
@@ -215,12 +198,6 @@ where
         f.debug_struct("Changes")
             .field("items", &self.inner)
             .finish()
-    }
-}
-
-impl<T: Changable> ExtendChanges<T> for Changes<T> {
-    fn extend_changes<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
-        self.inner.extend(iter)
     }
 }
 
