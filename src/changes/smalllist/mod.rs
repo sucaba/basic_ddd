@@ -1,6 +1,5 @@
 use std::fmt;
 use std::fmt::Debug;
-use std::ops;
 use std::vec;
 
 pub struct SmallList<T> {
@@ -29,17 +28,6 @@ impl<T> SmallList<T> {
         Self {
             inner: self.inner.drain(pos..).collect(),
         }
-    }
-
-    pub fn reverse(&mut self) {
-        self.inner.reverse();
-    }
-
-    pub fn drain<R>(&mut self, range: R) -> vec::Drain<'_, T>
-    where
-        R: ops::RangeBounds<usize>,
-    {
-        self.inner.drain(range)
     }
 
     pub fn push(&mut self, item: T) {

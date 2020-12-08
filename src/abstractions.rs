@@ -225,7 +225,11 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
 
 impl<'a, T: AtomicallyChangable> Drop for Atomic<'a, T> {
     fn drop(&mut self) {
-        let mut to_compensate = self.subj.undomanager_mut().take_after(self.check_point);
+        let mut to_compensate: Vec<_> = self
+            .subj
+            .undomanager_mut()
+            .take_after(self.check_point)
+            .collect();
         to_compensate.reverse();
         for BasicChange { undo, .. } in to_compensate {
             self.subj.apply(undo);

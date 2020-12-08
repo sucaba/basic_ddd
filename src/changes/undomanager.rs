@@ -1,20 +1,16 @@
-use super::smalllist::*;
 use super::{BasicChange, Changes, ExtendChanges};
 use crate::abstractions::*;
 use std::fmt;
 use std::fmt::Debug;
 use std::ops;
-use std::vec;
 
 pub struct UndoManager<T: Changable> {
-    inner: SmallList<BasicChange<T>>,
+    inner: Vec<BasicChange<T>>,
 }
 
 impl<T: Changable> UndoManager<T> {
     pub fn new() -> Self {
-        UndoManager {
-            inner: SmallList::new(),
-        }
+        UndoManager { inner: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -29,13 +25,11 @@ impl<T: Changable> UndoManager<T> {
         self.inner.iter()
     }
 
-    pub fn take_after(&mut self, pos: usize) -> Self {
-        Self {
-            inner: self.inner.take_after(pos),
-        }
+    pub fn take_after(&mut self, pos: usize) -> impl Iterator<Item = BasicChange<T>> + '_ {
+        self.inner.drain(pos..)
     }
 
-    pub fn drain<R>(&mut self, range: R) -> vec::Drain<'_, BasicChange<T>>
+    pub fn drain<R>(&mut self, range: R) -> impl Iterator<Item = BasicChange<T>> + '_
     where
         R: ops::RangeBounds<usize>,
     {
@@ -63,7 +57,7 @@ impl<T: Changable> UndoManager<T> {
     {
         self.into_iter()
             .map(move |ch| ch.bubble_up(f.clone()))
-            .collect::<UndoManager<O>>()
+            .collect()
     }
 }
 
@@ -150,7 +144,7 @@ impl<T: Changable> std::iter::IntoIterator for UndoManager<T> {
 impl<T: Changable> From<Changes<T>> for UndoManager<T> {
     fn from(changes: Changes<T>) -> Self {
         Self {
-            inner: changes.inner,
+            inner: changes.inner.into_iter().collect(),
         }
     }
 }

@@ -5,8 +5,6 @@ use crate::abstractions::*;
 use smalllist::SmallList;
 use std::fmt;
 use std::fmt::Debug;
-use std::ops;
-use std::vec;
 pub use undomanager::*;
 
 pub struct BasicChange<T: Changable> {
@@ -121,13 +119,6 @@ impl<T: Changable> Changes<T> {
         Self {
             inner: self.inner.take_after(pos),
         }
-    }
-
-    pub fn drain<R>(&mut self, range: R) -> vec::Drain<'_, BasicChange<T>>
-    where
-        R: ops::RangeBounds<usize>,
-    {
-        self.inner.drain(range)
     }
 
     pub fn to(self, dest: &mut Self) {
