@@ -2,6 +2,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::iter;
 use std::ops;
+use std::slice;
 
 pub struct Record<T> {
     inner: Vec<T>,
@@ -20,7 +21,7 @@ impl<T> Record<T> {
         self.inner.reverse();
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+    pub fn iter(&self) -> slice::Iter<'_, T> {
         self.inner.iter()
     }
 
@@ -53,9 +54,9 @@ impl<T> iter::Extend<T> for Record<T> {
     }
 }
 
-impl<T, I> std::ops::Index<I> for Record<T>
+impl<T, I> ops::Index<I> for Record<T>
 where
-    I: std::slice::SliceIndex<[T]>,
+    I: slice::SliceIndex<[T]>,
 {
     type Output = I::Output;
 
@@ -109,7 +110,7 @@ impl<T> Into<Vec<T>> for Record<T> {
     }
 }
 
-impl<T> std::iter::FromIterator<T> for Record<T> {
+impl<T> iter::FromIterator<T> for Record<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Self {
             inner: iter.into_iter().collect(),
@@ -117,9 +118,9 @@ impl<T> std::iter::FromIterator<T> for Record<T> {
     }
 }
 
-impl<T> std::iter::IntoIterator for Record<T> {
+impl<T> iter::IntoIterator for Record<T> {
     type Item = T;
-    type IntoIter = <Vec<T> as std::iter::IntoIterator>::IntoIter;
+    type IntoIter = <Vec<T> as iter::IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()
