@@ -285,6 +285,16 @@ pub trait Streamable: Changable {
     }
 }
 
+impl<T: Undoable> Streamable for T {
+    fn stream_to<S>(&mut self, stream: &mut S)
+    where
+        S: Stream<Self::EventType>,
+    {
+        let changes = mem::take(self.undomanager_mut());
+        stream.stream(changes.into_iter().map(BasicChange::take_redo));
+    }
+}
+
 pub trait Unstreamable: Changable + Default + Sized {
     fn load<'a, I>(events: I) -> crate::result::Result<Self>
     where
@@ -478,19 +488,6 @@ mod tests {
     impl Undoable for TestEntry {
         fn undomanager_mut(&mut self) -> &mut UndoManager<Self> {
             &mut self.changes
-        }
-    }
-
-    impl Streamable for TestEntry {
-        fn stream_to<S>(&mut self, stream: &mut S)
-        where
-            S: Stream<Self::EventType>,
-        {
-            stream.stream(
-                self.changes
-                    .drain(..)
-                    .map(|BasicChange { redo, undo: _ }| redo),
-            )
         }
     }
 
