@@ -4,9 +4,9 @@ use std::mem;
 use std::rc::Rc;
 
 use basic_ddd::{
-    AtomicallyChangable, BasicChange, Changable, Changes, Error, Id, Identifiable, InMemoryStorage,
-    Load, Owned, OwnedCollection, OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream,
-    Streamable, UndoManager,
+    BasicChange, Changable, Changes, Error, Id, Identifiable, InMemoryStorage, Load, Owned,
+    OwnedCollection, OwnedEvent, Primary, PrimaryEvent, Result, Save, Stream, Streamable,
+    UndoManager, Undoable,
 };
 
 fn main() -> Result<()> {
@@ -150,7 +150,7 @@ impl Changable for Order {
     }
 }
 
-impl AtomicallyChangable for Order {
+impl Undoable for Order {
     fn undomanager_mut(&mut self) -> &mut UndoManager<Self> {
         &mut self.changes
     }

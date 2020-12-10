@@ -30,7 +30,7 @@ impl<T: Changable> UndoManager<T> {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub fn history_len(&self) -> usize {
         self.inner.len()
     }
 
@@ -261,11 +261,11 @@ pub trait Changable: Sized {
     fn apply(&mut self, event: Self::EventType) -> Self::EventType;
 }
 
-pub trait AtomicallyChangable: Changable + Sized {
+pub trait Undoable: Changable + Sized {
     fn undomanager_mut(&mut self) -> &mut UndoManager<Self>;
 
-    fn begin_changes<'a>(&'a mut self) -> Atomic<'a, Self> {
-        let check_point = self.undomanager_mut().len();
+    fn begin_changes(&mut self) -> Atomic<'_, Self> {
+        let check_point = self.undomanager_mut().history_len();
         Atomic {
             subj: self,
             check_point,
@@ -291,12 +291,12 @@ pub trait Unstreamable: Changable + Default + Sized {
         I: IntoIterator<Item = Self::EventType>;
 }
 
-pub struct Atomic<'a, T: AtomicallyChangable> {
+pub struct Atomic<'a, T: Undoable> {
     subj: &'a mut T,
     check_point: usize,
 }
 
-impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
+impl<'a, T: Undoable> Atomic<'a, T> {
     pub fn invoke<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
@@ -331,7 +331,7 @@ impl<'a, T: AtomicallyChangable> Atomic<'a, T> {
     }
 }
 
-impl<'a, T: AtomicallyChangable> Drop for Atomic<'a, T> {
+impl<'a, T: Undoable> Drop for Atomic<'a, T> {
     fn drop(&mut self) {
         let mut to_compensate: Vec<_> = self
             .subj
@@ -475,7 +475,7 @@ mod tests {
         }
     }
 
-    impl AtomicallyChangable for TestEntry {
+    impl Undoable for TestEntry {
         fn undomanager_mut(&mut self) -> &mut UndoManager<Self> {
             &mut self.changes
         }
