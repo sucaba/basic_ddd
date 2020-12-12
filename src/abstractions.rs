@@ -31,7 +31,7 @@ impl<T: Changable> UndoManager<T> {
     }
 
     pub fn history_len(&self) -> usize {
-        self.inner.len()
+        self.inner.history_len()
     }
 
     pub fn reverse(&mut self) {

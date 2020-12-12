@@ -13,7 +13,7 @@ impl<T> Record<T> {
         Record { inner: Vec::new() }
     }
 
-    pub fn len(&self) -> usize {
+    pub fn history_len(&self) -> usize {
         self.inner.len()
     }
 
