@@ -54,7 +54,7 @@ impl<T: Changable> UndoManager<T> {
     }
 
     pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
-        self.inner.push(BasicChange { redo, undo })
+        self.inner.push(BasicChange::<T> { redo, undo })
     }
 
     pub fn append<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
@@ -291,7 +291,7 @@ impl<T: Undoable> Streamable for T {
         S: Stream<Self::EventType>,
     {
         let changes = mem::take(self.undomanager_mut());
-        stream.stream(changes.into_iter().map(BasicChange::take_redo));
+        stream.stream(changes.into_iter().map(BChange::take_redo));
     }
 }
 
@@ -330,7 +330,7 @@ impl<'a, T: Undoable> Atomic<'a, T> {
         B: Clone + Fn(Inner::EventType) -> T::EventType,
     {
         let inner_changes = change_inner(self.subj)?;
-        let changes = inner_changes.bubble_up(bubble_up);
+        let changes = inner_changes.bubble_up::<T, B>(bubble_up);
         self.subj.undomanager_mut().append(changes);
 
         Ok(())
@@ -349,7 +349,7 @@ impl<'a, T: Undoable> Drop for Atomic<'a, T> {
             .take_after(self.check_point)
             .collect();
         to_compensate.reverse();
-        for BasicChange { undo, .. } in to_compensate {
+        for BChange { undo, .. } in to_compensate {
             self.subj.apply(undo);
         }
     }
@@ -495,7 +495,7 @@ mod tests {
     fn should_implicitly_rollback_changes() {
         let mut sut = TestEntry {
             state: Stopped,
-            changes: vec![BasicChange {
+            changes: vec![BChange {
                 redo: Stopped,
                 undo: Stopped,
             }]

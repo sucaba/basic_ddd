@@ -426,11 +426,11 @@ mod owned_collection_tests {
         assert_eq!(
             sorted(changes.into()),
             vec![
-                BasicChange {
+                BChange {
                     redo: Created(colored(1, Red)),
                     undo: Deleted(colored(1, Red).get_id())
                 },
-                BasicChange {
+                BChange {
                     redo: Created(colored(2, Red)),
                     undo: Deleted(colored(2, Red).get_id())
                 }
@@ -446,7 +446,7 @@ mod owned_collection_tests {
 
         assert_eq!(
             changes,
-            vec![BasicChange {
+            vec![BChange {
                 redo: Updated(EXISTING_POS, colored(EXISTING_ID, Red)),
                 undo: Updated(EXISTING_POS, colored(EXISTING_ID, None))
             }]
@@ -466,7 +466,7 @@ mod owned_collection_tests {
 
         assert_eq!(
             changes,
-            vec![BasicChange {
+            vec![BChange {
                 redo: Deleted(colored(EXISTING_ID, Red).get_id()),
                 undo: Created(colored(EXISTING_ID, None))
             }]
@@ -482,7 +482,7 @@ mod owned_collection_tests {
         Id<T::IdentifiableType>: hash::Hash + Clone + Ord,
         Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
     {
-        events.sort_by_key(|BasicChange { redo, .. }| OwnedEvent::get_id(&redo));
+        events.sort_by_key(|BChange { redo, .. }| OwnedEvent::get_id(&redo));
         events
     }
 }

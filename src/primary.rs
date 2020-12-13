@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![BasicChange {
+            vec![BChange {
                 redo: Updated(MyEntity {
                     id: ID,
                     name: "bar".into()
@@ -269,7 +269,7 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![BasicChange {
+            vec![BChange {
                 redo: Updated(MyEntity {
                     id: ID,
                     name: "bar".into()
@@ -291,7 +291,7 @@ mod tests {
         assert_eq!(sut.try_get(), None);
         assert_eq!(
             changes,
-            vec![BasicChange {
+            vec![BChange {
                 redo: Deleted(
                     (MyEntity {
                         id: ID,

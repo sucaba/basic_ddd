@@ -7,38 +7,39 @@ use smalllist::SmallList;
 use std::fmt;
 use std::fmt::Debug;
 
-pub struct BasicChange<T: Changable> {
-    pub redo: T::EventType,
-    pub undo: T::EventType,
+pub type BasicChange<T> = BChange<<T as Changable>::EventType>;
+
+pub struct BChange<T> {
+    pub redo: T,
+    pub undo: T,
 }
 
-impl<T: Changable> BasicChange<T> {
-    pub fn take_redo(self) -> T::EventType {
+impl<T> BChange<T> {
+    pub fn take_redo(self) -> T {
         self.redo
     }
 
-    pub fn take_undo(self) -> T::EventType {
+    pub fn take_undo(self) -> T {
         self.undo
     }
 
-    pub fn bubble_up<O, F>(self, f: F) -> BasicChange<O>
+    pub fn bubble_up<O, F>(self, f: F) -> BChange<O>
     where
-        O: Changable,
-        F: Fn(T::EventType) -> O::EventType,
+        F: Fn(T) -> O,
     {
-        BasicChange {
+        BChange {
             redo: f(self.redo),
             undo: f(self.undo),
         }
     }
 }
 
-impl<T: Changable> Clone for BasicChange<T>
+impl<T> Clone for BChange<T>
 where
-    T::EventType: Clone,
+    T: Clone,
 {
     fn clone(&self) -> Self {
-        BasicChange {
+        BChange {
             redo: self.redo.clone(),
             undo: self.undo.clone(),
         }
@@ -49,7 +50,7 @@ pub trait ChangeUnit<T: Changable> {
     fn from_application(event: T::EventType, subj: &mut T) -> Self;
 }
 
-impl<T: Changable> ChangeUnit<T> for BasicChange<T>
+impl<T: Changable> ChangeUnit<T> for BChange<T::EventType>
 where
     T::EventType: Clone,
 {
@@ -59,10 +60,9 @@ where
     }
 }
 
-impl<T> Debug for BasicChange<T>
+impl<T> Debug for BChange<T>
 where
-    T: Changable,
-    T::EventType: Debug,
+    T: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("BasicChange")
@@ -72,10 +72,9 @@ where
     }
 }
 
-impl<T> PartialEq for BasicChange<T>
+impl<T> PartialEq for BChange<T>
 where
-    T: Changable,
-    T::EventType: PartialEq,
+    T: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.redo.eq(&other.redo) && self.undo.eq(&other.undo)
@@ -98,7 +97,7 @@ impl<T: Changable> Changes<T> {
         T::EventType: Clone,
     {
         let undo = subj.apply(redo.clone());
-        Self::only(BasicChange { redo, undo })
+        Self::only(BChange { redo, undo })
     }
 
     fn only(item: BasicChange<T>) -> Self {
@@ -126,7 +125,7 @@ impl<T: Changable> Changes<T> {
     }
 
     pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
-        self.inner.push(BasicChange { redo, undo })
+        self.inner.push(BChange { redo, undo })
     }
 
     pub fn map<F, O: Changable>(self, f: F) -> Changes<O>
@@ -136,8 +135,9 @@ impl<T: Changable> Changes<T> {
         self.into_iter().map(f).collect::<Changes<O>>()
     }
 
-    pub fn bubble_up<F, O: Changable>(self, f: F) -> Changes<O>
+    pub fn bubble_up<O, F>(self, f: F) -> Changes<O>
     where
+        O: Changable,
         F: Clone + Fn(T::EventType) -> O::EventType,
     {
         self.into_iter()
