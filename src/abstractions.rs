@@ -8,6 +8,9 @@ use std::mem;
 use std::ops;
 use std::rc::Rc;
 
+pub type BasicChange<T> = BChange<<T as Changable>::EventType>;
+pub type Changes<T> = BChanges<<T as Changable>::EventType>;
+
 pub struct UndoManager<T: Changable> {
     inner: Record<BasicChange<T>>,
 }
@@ -323,14 +326,17 @@ impl<'a, T: Undoable> Atomic<'a, T> {
         Ok(())
     }
 
-    pub fn mutate_inner<Inner, M, B, E>(&mut self, change_inner: M, bubble_up: B) -> Result<(), E>
+    pub fn mutate_inner<InnerEvent, M, B, E>(
+        &mut self,
+        change_inner: M,
+        bubble_up: B,
+    ) -> Result<(), E>
     where
-        Inner: Changable,
-        M: FnOnce(&mut T) -> Result<Changes<Inner>, E>,
-        B: Clone + Fn(Inner::EventType) -> T::EventType,
+        M: FnOnce(&mut T) -> Result<BChanges<InnerEvent>, E>,
+        B: Clone + Fn(InnerEvent) -> T::EventType,
     {
         let inner_changes = change_inner(self.subj)?;
-        let changes = inner_changes.bubble_up::<T, B>(bubble_up);
+        let changes = inner_changes.bubble_up(bubble_up);
         self.subj.undomanager_mut().append(changes);
 
         Ok(())

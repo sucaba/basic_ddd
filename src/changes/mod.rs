@@ -7,8 +7,6 @@ use smalllist::SmallList;
 use std::fmt;
 use std::fmt::Debug;
 
-pub type BasicChange<T> = BChange<<T as Changable>::EventType>;
-
 pub struct BChange<T> {
     pub redo: T,
     pub undo: T,
@@ -81,26 +79,27 @@ where
     }
 }
 
-pub struct Changes<T: Changable> {
-    inner: SmallList<BasicChange<T>>,
+pub struct BChanges<T> {
+    inner: SmallList<BChange<T>>,
 }
 
-impl<T: Changable> Changes<T> {
+impl<T> BChanges<T> {
     pub fn new() -> Self {
-        Changes {
+        BChanges {
             inner: SmallList::new(),
         }
     }
 
-    pub fn from_application(redo: T::EventType, subj: &mut T) -> Self
+    pub fn from_application<S>(redo: T, subj: &mut S) -> Self
     where
-        T::EventType: Clone,
+        S: Changable<EventType = T>,
+        T: Clone,
     {
         let undo = subj.apply(redo.clone());
-        Self::only(BChange { redo, undo })
+        Self::only(BChange::<T> { redo, undo })
     }
 
-    fn only(item: BasicChange<T>) -> Self {
+    fn only(item: BChange<T>) -> Self {
         Self {
             inner: SmallList::once(item),
         }
@@ -110,7 +109,7 @@ impl<T: Changable> Changes<T> {
         self.inner.len()
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, BasicChange<T>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, BChange<T>> {
         self.inner.iter()
     }
 
@@ -124,36 +123,34 @@ impl<T: Changable> Changes<T> {
         dest.append(self)
     }
 
-    pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
+    pub fn push(&mut self, redo: T, undo: T) {
         self.inner.push(BChange { redo, undo })
     }
 
-    pub fn map<F, O: Changable>(self, f: F) -> Changes<O>
+    pub fn map<F, O>(self, f: F) -> BChanges<O>
     where
-        F: Fn(BasicChange<T>) -> BasicChange<O>,
+        F: Fn(BChange<T>) -> BChange<O>,
     {
-        self.into_iter().map(f).collect::<Changes<O>>()
+        self.into_iter().map(f).collect::<BChanges<O>>()
     }
 
-    pub fn bubble_up<O, F>(self, f: F) -> Changes<O>
+    pub fn bubble_up<O, F>(self, f: F) -> BChanges<O>
     where
-        O: Changable,
-        F: Clone + Fn(T::EventType) -> O::EventType,
+        F: Clone + Fn(T) -> O,
     {
         self.into_iter()
             .map(move |ch| ch.bubble_up(f.clone()))
-            .collect::<Changes<O>>()
+            .collect::<BChanges<O>>()
     }
 
-    pub fn append<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
+    pub fn append<I: IntoIterator<Item = BChange<T>>>(&mut self, iter: I) {
         self.inner.extend(iter)
     }
 }
 
-impl<T, I> std::ops::Index<I> for Changes<T>
+impl<T, I> std::ops::Index<I> for BChanges<T>
 where
-    T: Changable,
-    I: std::slice::SliceIndex<[BasicChange<T>]>,
+    I: std::slice::SliceIndex<[BChange<T>]>,
 {
     type Output = I::Output;
 
@@ -162,15 +159,15 @@ where
     }
 }
 
-impl<T: Changable> Default for Changes<T> {
+impl<T> Default for BChanges<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Changable> Clone for Changes<T>
+impl<T> Clone for BChanges<T>
 where
-    T::EventType: Clone,
+    T: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -179,45 +176,45 @@ where
     }
 }
 
-impl<T: Changable> PartialEq for Changes<T>
+impl<T> PartialEq for BChanges<T>
 where
-    T::EventType: PartialEq,
+    T: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         PartialEq::eq(&self.inner, &other.inner)
     }
 }
 
-impl<T: Changable> Eq for Changes<T> where T::EventType: Eq {}
+impl<T> Eq for BChanges<T> where T: Eq {}
 
-impl<T: Changable> Debug for Changes<T>
+impl<T> Debug for BChanges<T>
 where
-    T::EventType: Debug,
+    T: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("Changes")
+        f.debug_struct("BChanges")
             .field("items", &self.inner)
             .finish()
     }
 }
 
-impl<T: Changable> Into<Vec<BasicChange<T>>> for Changes<T> {
-    fn into(self) -> Vec<BasicChange<T>> {
+impl<T> Into<Vec<BChange<T>>> for BChanges<T> {
+    fn into(self) -> Vec<BChange<T>> {
         self.inner.into_iter().collect()
     }
 }
 
-impl<T: Changable> std::iter::FromIterator<BasicChange<T>> for Changes<T> {
-    fn from_iter<I: IntoIterator<Item = BasicChange<T>>>(iter: I) -> Self {
+impl<T> std::iter::FromIterator<BChange<T>> for BChanges<T> {
+    fn from_iter<I: IntoIterator<Item = BChange<T>>>(iter: I) -> Self {
         Self {
             inner: iter.into_iter().collect(),
         }
     }
 }
 
-impl<T: Changable> std::iter::IntoIterator for Changes<T> {
-    type Item = BasicChange<T>;
-    type IntoIter = <Vec<BasicChange<T>> as std::iter::IntoIterator>::IntoIter;
+impl<T> std::iter::IntoIterator for BChanges<T> {
+    type Item = BChange<T>;
+    type IntoIter = <Vec<BChange<T>> as std::iter::IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()
