@@ -179,7 +179,6 @@ pub trait Owned {
 
 pub struct Id<T: Identifiable> {
     id: T::IdType,
-    marker: std::marker::PhantomData<T>,
 }
 
 impl<T: Identifiable> Hash for Id<T>
@@ -193,10 +192,7 @@ where
 
 impl<T: Identifiable> Id<T> {
     pub fn new(id: T::IdType) -> Self {
-        Self {
-            id,
-            marker: Default::default(),
-        }
+        Self { id }
     }
 
     pub fn id(&self) -> &T::IdType {
