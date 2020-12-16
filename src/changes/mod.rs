@@ -44,20 +44,6 @@ where
     }
 }
 
-pub trait ChangeUnit<T: Changable> {
-    fn from_application(event: T::EventType, subj: &mut T) -> Self;
-}
-
-impl<T: Changable> ChangeUnit<T> for BChange<T::EventType>
-where
-    T::EventType: Clone,
-{
-    fn from_application(redo: T::EventType, subj: &mut T) -> Self {
-        let undo = subj.apply(redo.clone());
-        Self { redo, undo }
-    }
-}
-
 impl<T> Debug for BChange<T>
 where
     T: Debug,
