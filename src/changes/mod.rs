@@ -3,9 +3,8 @@ mod smalllist;
 
 pub use record::*;
 use smalllist::SmallList;
-use std::fmt;
-use std::fmt::Debug;
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BChange<T> {
     pub redo: T,
     pub undo: T,
@@ -31,39 +30,7 @@ impl<T> BChange<T> {
     }
 }
 
-impl<T> Clone for BChange<T>
-where
-    T: Clone,
-{
-    fn clone(&self) -> Self {
-        BChange {
-            redo: self.redo.clone(),
-            undo: self.undo.clone(),
-        }
-    }
-}
-
-impl<T> Debug for BChange<T>
-where
-    T: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("BasicChange")
-            .field("redo", &self.redo)
-            .field("undo", &self.undo)
-            .finish()
-    }
-}
-
-impl<T> PartialEq for BChange<T>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.redo.eq(&other.redo) && self.undo.eq(&other.undo)
-    }
-}
-
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BChanges<T> {
     inner: SmallList<BChange<T>>,
 }
@@ -132,45 +99,6 @@ where
 
     fn index(&self, index: I) -> &Self::Output {
         self.inner.index(index)
-    }
-}
-
-impl<T> Default for BChanges<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T> Clone for BChanges<T>
-where
-    T: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
-impl<T> PartialEq for BChanges<T>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        PartialEq::eq(&self.inner, &other.inner)
-    }
-}
-
-impl<T> Eq for BChanges<T> where T: Eq {}
-
-impl<T> Debug for BChanges<T>
-where
-    T: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("BChanges")
-            .field("items", &self.inner)
-            .finish()
     }
 }
 

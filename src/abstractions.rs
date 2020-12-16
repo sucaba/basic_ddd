@@ -17,7 +17,7 @@ where
     T: Clone,
 {
     let undo = subj.apply(redo.clone());
-    BChanges::only(BChange::<T> { redo, undo })
+    BChanges::only(BChange { redo, undo })
 }
 
 pub struct UndoManager<T: Changable> {
@@ -66,7 +66,7 @@ impl<T: Changable> UndoManager<T> {
     }
 
     pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
-        self.inner.push(BasicChange::<T> { redo, undo })
+        self.inner.push(BChange { redo, undo })
     }
 
     pub fn append<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {

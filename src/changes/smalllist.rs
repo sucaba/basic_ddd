@@ -1,18 +1,9 @@
-use std::fmt;
 use std::fmt::Debug;
 use std::vec;
 
+#[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct SmallList<T> {
     inner: Vec<T>,
-}
-
-impl<T> Debug for SmallList<T>
-where
-    T: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_list().entries(&self.inner).finish()
-    }
 }
 
 impl<T> SmallList<T> {
@@ -54,14 +45,6 @@ where
     }
 }
 
-impl<T: Clone> Clone for SmallList<T> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
 impl<T> Extend<T> for SmallList<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         self.inner.extend(iter)
@@ -81,14 +64,6 @@ impl<T> std::iter::FromIterator<T> for SmallList<T> {
         }
     }
 }
-
-impl<T: PartialEq> PartialEq for SmallList<T> {
-    fn eq(&self, other: &Self) -> bool {
-        return PartialEq::eq(&self.inner, &other.inner);
-    }
-}
-
-impl<T: Eq> Eq for SmallList<T> {}
 
 impl<T> std::iter::IntoIterator for SmallList<T> {
     type Item = T;

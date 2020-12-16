@@ -1,9 +1,9 @@
-use std::fmt;
 use std::fmt::Debug;
 use std::iter;
 use std::ops;
 use std::slice;
 
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Record<T> {
     inner: Vec<T>,
 }
@@ -62,45 +62,6 @@ where
 
     fn index(&self, index: I) -> &Self::Output {
         self.inner.index(index)
-    }
-}
-
-impl<T> Default for Record<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T> Clone for Record<T>
-where
-    T: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
-impl<T> PartialEq for Record<T>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        PartialEq::eq(&self.inner, &other.inner)
-    }
-}
-
-impl<T> Eq for Record<T> where T: Eq {}
-
-impl<T> Debug for Record<T>
-where
-    T: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("UndoManager")
-            .field("items", &self.inner)
-            .finish()
     }
 }
 
