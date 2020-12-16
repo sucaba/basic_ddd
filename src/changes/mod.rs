@@ -1,7 +1,6 @@
 mod record;
 mod smalllist;
 
-use crate::abstractions::*;
 pub use record::*;
 use smalllist::SmallList;
 use std::fmt;
@@ -76,16 +75,7 @@ impl<T> BChanges<T> {
         }
     }
 
-    pub fn from_application<S>(redo: T, subj: &mut S) -> Self
-    where
-        S: Changable<EventType = T>,
-        T: Clone,
-    {
-        let undo = subj.apply(redo.clone());
-        Self::only(BChange::<T> { redo, undo })
-    }
-
-    fn only(item: BChange<T>) -> Self {
+    pub fn only(item: BChange<T>) -> Self {
         Self {
             inner: SmallList::once(item),
         }

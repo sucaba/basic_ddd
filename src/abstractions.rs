@@ -11,6 +11,15 @@ use std::rc::Rc;
 pub type BasicChange<T> = BChange<<T as Changable>::EventType>;
 pub type Changes<T> = BChanges<<T as Changable>::EventType>;
 
+pub fn applied<S, T>(redo: T, subj: &mut S) -> BChanges<T>
+where
+    S: Changable<EventType = T>,
+    T: Clone,
+{
+    let undo = subj.apply(redo.clone());
+    BChanges::only(BChange::<T> { redo, undo })
+}
+
 pub struct UndoManager<T: Changable> {
     inner: Record<BasicChange<T>>,
 }

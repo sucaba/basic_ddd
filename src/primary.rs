@@ -1,5 +1,4 @@
 use super::abstractions::*;
-use crate::changes::*;
 use crate::result::NotFound;
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
@@ -135,7 +134,7 @@ where
     where
         T: Clone,
     {
-        BChanges::from_application(Created(row), self)
+        applied(Created(row), self)
     }
 
     pub fn set(&mut self, row: T) -> StdResult<Changes<Self>, NotFound<T>>
@@ -143,7 +142,7 @@ where
         T: Clone,
     {
         if let Some(_) = &self.inner {
-            Ok(BChanges::from_application(Updated(row), self))
+            Ok(applied(Updated(row), self))
         } else {
             Err(NotFound(row))
         }
@@ -157,7 +156,7 @@ where
         if let Some(existing) = &self.inner {
             let mut modified = existing.clone();
             f(&mut modified);
-            Ok(BChanges::from_application(Updated(modified), self))
+            Ok(applied(Updated(modified), self))
         } else {
             Err(NotFound(()))
         }
@@ -169,7 +168,7 @@ where
     {
         if let Some(existing) = &self.inner {
             let id = existing.get_id();
-            Ok(BChanges::from_application(Deleted(id), self))
+            Ok(applied(Deleted(id), self))
         } else {
             Err(NotFound(()))
         }
@@ -205,6 +204,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::changes::BChange;
     use pretty_assertions::assert_eq;
 
     #[derive(Debug, Clone, Eq, PartialEq)]

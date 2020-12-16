@@ -1,6 +1,5 @@
 // TODO: Remove std::hash references
 use super::abstractions::*;
-use crate::changes::*;
 use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
@@ -285,7 +284,7 @@ where
      */
     pub fn update(&mut self, item: T) -> StdResult<Changes<Self>, NotFound<T>> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
-            Ok(BChanges::from_application(Updated(pos, item), self))
+            Ok(applied(Updated(pos, item), self))
         } else {
             Err(NotFound(item))
         }
@@ -298,7 +297,7 @@ where
     pub fn add_new(&mut self, item: T) -> StdResult<Changes<Self>, AlreadyExists<T>> {
         let id = item.get_id();
         if let None = self.position_by_id(&id) {
-            Ok(BChanges::from_application(Created(item), self))
+            Ok(applied(Created(item), self))
         } else {
             Err(AlreadyExists(item))
         }
@@ -324,7 +323,7 @@ where
         id: &'a Id<T::IdentifiableType>,
     ) -> StdResult<Changes<Self>, NotFound<&'a Id<T::IdentifiableType>>> {
         if let Some(_) = self.position_by_id(id) {
-            Ok(BChanges::from_application(Deleted(id.clone()), self))
+            Ok(applied(Deleted(id.clone()), self))
         } else {
             Err(NotFound(id))
         }
@@ -335,6 +334,7 @@ where
 mod owned_collection_tests {
 
     use super::*;
+    use crate::changes::BChange;
     use pretty_assertions::assert_eq;
     use std::cmp::{Eq, PartialEq};
     use std::rc::Rc;
