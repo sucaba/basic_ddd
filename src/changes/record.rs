@@ -7,11 +7,15 @@ use std::slice;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record<T> {
     inner: Vec<T>,
+    redos: Vec<T>,
 }
 
 impl<T> Record<T> {
     pub fn new() -> Self {
-        Record { inner: Vec::new() }
+        Record {
+            inner: Vec::new(),
+            redos: Vec::new(),
+        }
     }
 
     pub fn history_len(&self) -> usize {
@@ -39,6 +43,18 @@ impl<T> Record<T> {
 
     pub fn push(&mut self, entry: T) {
         self.inner.push(entry)
+    }
+
+    pub fn push_redo(&mut self, entry: T) {
+        self.redos.push(entry)
+    }
+
+    pub fn undo(&mut self) -> Option<T> {
+        self.inner.pop()
+    }
+
+    pub fn redo(&mut self) -> Option<T> {
+        self.redos.pop()
     }
 
     pub fn map<F, O>(self, f: F) -> Record<O>
@@ -82,6 +98,7 @@ impl<T> iter::FromIterator<T> for Record<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Self {
             inner: iter.into_iter().collect(),
+            redos: Vec::new(),
         }
     }
 }
@@ -98,5 +115,29 @@ impl<T> iter::IntoIterator for Record<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use TestEvent::*;
+
+    #[non_exhaustive]
+    enum TestEvent {
+        Incremented(usize),
+        Decremented(usize),
+    }
+
+    #[test]
+    fn should_extend_history() {
+        let mut sut = Record::new();
+        sut.extend(&[BChange {
+            redo: Incremented(1),
+            undo: Decremented(1),
+        }]);
+
+        assert_eq!(sut.history_len(), 1);
     }
 }

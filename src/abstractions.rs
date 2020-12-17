@@ -15,8 +15,16 @@ where
     S: Changable<EventType = T>,
     T: Clone,
 {
+    BChanges::only(applied_one(redo, subj))
+}
+
+pub fn applied_one<S, T>(redo: T, subj: &mut S) -> BChange<T>
+where
+    S: Changable<EventType = T>,
+    T: Clone,
+{
     let undo = subj.apply(redo.clone());
-    BChanges::only(BChange { redo, undo })
+    BChange { redo, undo }
 }
 
 pub trait Identifiable: Sized {
@@ -169,6 +177,28 @@ pub trait Undoable: Changable + Sized {
         Atomic {
             subj: self,
             check_point,
+        }
+    }
+
+    fn undo(&mut self)
+    where
+        Self::EventType: Clone,
+    {
+        if let Some(c) = self.undomanager_mut().undo() {
+            let undo = c.undo.clone();
+            let change = applied_one(undo, self);
+            self.undomanager_mut().push_redo(change);
+        }
+    }
+
+    fn redo(&mut self)
+    where
+        Self::EventType: Clone,
+    {
+        if let Some(c) = self.undomanager_mut().redo() {
+            let undo = c.undo.clone();
+            let change = applied_one(undo, self);
+            self.undomanager_mut().push(change);
         }
     }
 }
@@ -359,11 +389,10 @@ mod tests {
         fn start(&mut self) -> Result<(), String> {
             self.validate_not_started()?;
 
-            let was = self.state;
-            self.apply(Started);
+            let undo = self.apply(Started);
             self.changes.push(BChange {
                 redo: Started,
-                undo: was,
+                undo,
             });
             Ok(())
         }
@@ -397,9 +426,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn should_implicitly_rollback_changes() {
-        let mut sut = TestEntry {
+    fn given_stopped() -> TestEntry {
+        let sut = TestEntry {
             state: Stopped,
             changes: vec![BChange {
                 redo: Stopped,
@@ -408,6 +436,45 @@ mod tests {
             .into_iter()
             .collect(),
         };
+
+        assert_eq!(Stopped, sut.state);
+        sut
+    }
+
+    #[test]
+    fn should_apply_change() {
+        let mut sut = given_stopped();
+
+        sut.start().unwrap();
+
+        assert_eq!(sut.state, Started);
+    }
+
+    #[test]
+    fn should_undo_change() {
+        let mut sut = given_stopped();
+
+        sut.start().unwrap();
+        sut.undo();
+
+        assert_eq!(sut.state, Stopped);
+    }
+
+    #[test]
+    fn should_redo_change() {
+        let mut sut = given_stopped();
+
+        sut.start().unwrap();
+        sut.undo();
+
+        sut.redo();
+
+        assert_eq!(sut.state, Started);
+    }
+
+    #[test]
+    fn should_implicitly_rollback_changes() {
+        let mut sut = given_stopped();
 
         assert_eq!(
             sut.double_start(),
