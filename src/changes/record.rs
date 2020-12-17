@@ -1,9 +1,10 @@
+use super::{BChange, BChanges};
 use std::fmt::Debug;
 use std::iter;
 use std::ops;
 use std::slice;
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record<T> {
     inner: Vec<T>,
 }
@@ -48,6 +49,12 @@ impl<T> Record<T> {
     }
 }
 
+impl<T> Default for Record<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> iter::Extend<T> for Record<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         self.inner.extend(iter)
@@ -76,6 +83,12 @@ impl<T> iter::FromIterator<T> for Record<T> {
         Self {
             inner: iter.into_iter().collect(),
         }
+    }
+}
+
+impl<T> From<BChanges<T>> for Record<BChange<T>> {
+    fn from(src: BChanges<T>) -> Self {
+        src.into_iter().collect()
     }
 }
 

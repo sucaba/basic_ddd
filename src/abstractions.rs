@@ -1,15 +1,14 @@
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 
 use crate::changes::*;
-use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::mem;
-use std::ops;
 use std::rc::Rc;
 
 pub type BasicChange<T> = BChange<<T as Changable>::EventType>;
 pub type Changes<T> = BChanges<<T as Changable>::EventType>;
+pub type UndoManager<T> = Record<BChange<<T as Changable>::EventType>>;
 
 pub fn applied<S, T>(redo: T, subj: &mut S) -> BChanges<T>
 where
@@ -20,117 +19,10 @@ where
     BChanges::only(BChange { redo, undo })
 }
 
-pub struct UndoManager<T: Changable> {
-    inner: Record<BasicChange<T>>,
-}
-
-impl<T: Changable> fmt::Debug for UndoManager<T>
-where
-    T::EventType: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("UndoManager")
-            .field("inner", &self.inner)
-            .finish()
-    }
-}
-
-impl<T: Changable> UndoManager<T> {
-    pub fn new() -> Self {
-        UndoManager {
-            inner: Record::new(),
-        }
-    }
-
-    pub fn history_len(&self) -> usize {
-        self.inner.history_len()
-    }
-
-    pub fn reverse(&mut self) {
-        self.inner.reverse();
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<'_, BasicChange<T>> {
-        self.inner.iter()
-    }
-
-    pub fn take_after(&mut self, pos: usize) -> impl Iterator<Item = BasicChange<T>> + '_ {
-        self.inner.take_after(pos)
-    }
-
-    pub fn drain<'a, R>(&'a mut self, range: R) -> impl Iterator<Item = BasicChange<T>> + 'a
-    where
-        R: ops::RangeBounds<usize> + 'a,
-    {
-        self.inner.drain(range)
-    }
-
-    pub fn push(&mut self, redo: T::EventType, undo: T::EventType) {
-        self.inner.push(BChange { redo, undo })
-    }
-
-    pub fn append<I: IntoIterator<Item = BasicChange<T>>>(&mut self, iter: I) {
-        self.inner.extend(iter)
-    }
-}
-
-impl<T: Changable> PartialEq for UndoManager<T>
-where
-    T::EventType: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        PartialEq::eq(&self.inner, &other.inner)
-    }
-}
-
-impl<T: Changable> From<Changes<T>> for UndoManager<T> {
-    fn from(changes: Changes<T>) -> Self {
-        Self {
-            inner: changes.into_iter().collect(),
-        }
-    }
-}
-
-impl<T: Changable> Eq for UndoManager<T> where T::EventType: Eq {}
-
 pub trait Identifiable: Sized {
     type IdType: Eq;
 
     fn id(&self) -> Id<Self>;
-}
-
-impl<T: Changable> Default for UndoManager<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T: Changable> Clone for UndoManager<T>
-where
-    T::EventType: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
-impl<T: Changable> std::iter::FromIterator<BasicChange<T>> for UndoManager<T> {
-    fn from_iter<I: IntoIterator<Item = BasicChange<T>>>(iter: I) -> Self {
-        Self {
-            inner: iter.into_iter().collect(),
-        }
-    }
-}
-
-impl<T: Changable> std::iter::IntoIterator for UndoManager<T> {
-    type Item = BasicChange<T>;
-    type IntoIter = <Vec<BasicChange<T>> as std::iter::IntoIterator>::IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.inner.into_iter()
-    }
 }
 
 pub trait GetId {
@@ -327,7 +219,7 @@ impl<'a, T: Undoable> Atomic<'a, T> {
         F: FnOnce(&mut T) -> Result<Changes<T>, E>,
     {
         let changes = f(self.subj)?;
-        self.subj.undomanager_mut().append(changes);
+        self.subj.undomanager_mut().extend(changes);
         Ok(())
     }
 
@@ -342,7 +234,7 @@ impl<'a, T: Undoable> Atomic<'a, T> {
     {
         let inner_changes = change_inner(self.subj)?;
         let changes = inner_changes.bubble_up(bubble_up);
-        self.subj.undomanager_mut().append(changes);
+        self.subj.undomanager_mut().extend(changes);
 
         Ok(())
     }
@@ -469,7 +361,10 @@ mod tests {
 
             let was = self.state;
             self.apply(Started);
-            self.changes.push(Started, was);
+            self.changes.push(BChange {
+                redo: Started,
+                undo: was,
+            });
             Ok(())
         }
 
