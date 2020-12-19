@@ -6,43 +6,43 @@ use std::slice;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record<T> {
-    inner: Vec<T>,
+    undos: Vec<T>,
     redos: Vec<T>,
 }
 
 impl<T> Record<T> {
     pub fn new() -> Self {
         Record {
-            inner: Vec::new(),
+            undos: Vec::new(),
             redos: Vec::new(),
         }
     }
 
     pub fn history_len(&self) -> usize {
-        self.inner.len()
+        self.undos.len()
     }
 
     pub fn reverse(&mut self) {
-        self.inner.reverse();
+        self.undos.reverse();
     }
 
     pub fn iter(&self) -> slice::Iter<'_, T> {
-        self.inner.iter()
+        self.undos.iter()
     }
 
     pub fn take_after(&mut self, pos: usize) -> impl Iterator<Item = T> + '_ {
-        self.inner.drain(pos..)
+        self.undos.drain(pos..)
     }
 
     pub fn drain<R>(&mut self, range: R) -> impl Iterator<Item = T> + '_
     where
         R: ops::RangeBounds<usize>,
     {
-        self.inner.drain(range)
+        self.undos.drain(range)
     }
 
-    pub fn push(&mut self, entry: T) {
-        self.inner.push(entry)
+    pub fn push_undo(&mut self, entry: T) {
+        self.undos.push(entry)
     }
 
     pub fn push_redo(&mut self, entry: T) {
@@ -50,7 +50,7 @@ impl<T> Record<T> {
     }
 
     pub fn undo(&mut self) -> Option<T> {
-        self.inner.pop()
+        self.undos.pop()
     }
 
     pub fn redo(&mut self) -> Option<T> {
@@ -63,6 +63,16 @@ impl<T> Record<T> {
     {
         self.into_iter().map(f).collect()
     }
+
+    pub fn n_redos(&mut self, count: usize) -> Vec<T>
+    where
+        T: Clone,
+    {
+        let len = self.redos.len();
+        let mut result: Vec<_> = self.redos[(len - count)..len].into();
+        result.reverse();
+        result
+    }
 }
 
 impl<T> Default for Record<T> {
@@ -73,7 +83,7 @@ impl<T> Default for Record<T> {
 
 impl<T> iter::Extend<T> for Record<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        self.inner.extend(iter)
+        self.undos.extend(iter)
     }
 }
 
@@ -84,20 +94,20 @@ where
     type Output = I::Output;
 
     fn index(&self, index: I) -> &Self::Output {
-        self.inner.index(index)
+        self.undos.index(index)
     }
 }
 
 impl<T> Into<Vec<T>> for Record<T> {
     fn into(self) -> Vec<T> {
-        self.inner.into_iter().collect()
+        self.undos.into_iter().collect()
     }
 }
 
 impl<T> iter::FromIterator<T> for Record<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Self {
-            inner: iter.into_iter().collect(),
+            undos: iter.into_iter().collect(),
             redos: Vec::new(),
         }
     }
@@ -114,7 +124,7 @@ impl<T> iter::IntoIterator for Record<T> {
     type IntoIter = <Vec<T> as iter::IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.inner.into_iter()
+        self.undos.into_iter()
     }
 }
 

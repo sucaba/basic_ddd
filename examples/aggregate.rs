@@ -17,10 +17,10 @@ fn main() -> Result<()> {
 
     storage.save(create_new_order(1)?)?;
 
-    // println!("storage:\n{:#?}", order42);
+    // println!("storage:\n{:#?}", storage);
     let copy = storage.load(&order42.id())?;
 
-    let _ = order42.take_changes();
+    order42.forget_changes();
     pretty_assertions::assert_eq!(order42, copy);
 
     println!("success!");

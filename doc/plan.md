@@ -1,7 +1,8 @@
 # Plan
 
-0. apply() releases old resources which can be stored in undo event
-1. aggregate example: add_new_item should be atomic
+1. 2 strategies for event sourcing of Undoable:
+    - undo_all and write redos
+    - keep all redos by cloning applied event
 4. apply should return result which is Err if event is inconsistent with
    current implementation.
 5. Wrapper around type to ensure 'not deleted' on a compile time.

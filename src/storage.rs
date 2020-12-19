@@ -1,5 +1,6 @@
 use crate::abstractions::{Changable, Id, Identifiable, StreamAdapter, Streamable, Unstreamable};
 use crate::result::Result;
+use std::fmt;
 
 pub trait Load<T>
 where
@@ -37,6 +38,20 @@ where
     }
 }
 
+impl<T, TEvent> fmt::Debug for EventEnvelope<T, TEvent>
+where
+    T: Identifiable,
+    Id<T>: fmt::Debug,
+    TEvent: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("EventEnvelope")
+            .field("id", &self.id)
+            .field("events", &self.event)
+            .finish()
+    }
+}
+
 pub struct InMemoryStorage<T, TEvent>
 where
     T: Identifiable,
@@ -57,11 +72,36 @@ where
     where
         TEvent: Clone,
     {
+        /*
+        let selected: Vec<_> = self
+            .events
+            .iter()
+            .filter(move |x| &x.id == id)
+            .map(|x| &x.event)
+            .cloned()
+            .collect();
+
+        println!("** selected events = {:#?}", selected);
+        println!("** all events = {:#?}", self.events);
+        */
         self.events
             .iter()
             .filter(move |x| &x.id == id)
             .map(|x| &x.event)
             .cloned()
+    }
+}
+
+impl<T, TEvent> fmt::Debug for InMemoryStorage<T, TEvent>
+where
+    T: Identifiable,
+    TEvent: fmt::Debug,
+    Id<T>: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("InMemoryStorage")
+            .field("events", &self.events)
+            .finish()
     }
 }
 

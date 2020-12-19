@@ -180,7 +180,7 @@ pub trait Undoable: Changable + Sized {
         }
     }
 
-    fn undo(&mut self)
+    fn undo(&mut self) -> bool
     where
         Self::EventType: Clone,
     {
@@ -188,18 +188,55 @@ pub trait Undoable: Changable + Sized {
             let undo = c.undo.clone();
             let change = applied_one(undo, self);
             self.undomanager_mut().push_redo(change);
+            true
+        } else {
+            false
         }
     }
 
-    fn redo(&mut self)
+    fn redo(&mut self) -> bool
     where
         Self::EventType: Clone,
     {
         if let Some(c) = self.undomanager_mut().redo() {
             let undo = c.undo.clone();
             let change = applied_one(undo, self);
-            self.undomanager_mut().push(change);
+            self.undomanager_mut().push_undo(change);
+            true
+        } else {
+            false
         }
+    }
+
+    fn undo_all(&mut self)
+    where
+        Self::EventType: Clone,
+    {
+        while self.undo() {}
+    }
+
+    fn redo_n(&mut self, n: usize)
+    where
+        Self::EventType: Clone,
+    {
+        for _ in 0..n {
+            self.redo();
+        }
+    }
+
+    fn all_changes(&mut self) -> Vec<BChange<Self::EventType>>
+    where
+        Self::EventType: Clone,
+    {
+        let count = self.undomanager_mut().history_len();
+        self.undo_all();
+        let result = self.undomanager_mut().n_redos(count);
+        self.redo_n(count);
+        result
+    }
+
+    fn forget_changes(&mut self) {
+        mem::take(self.undomanager_mut());
     }
 }
 
@@ -215,13 +252,16 @@ pub trait Streamable: Changable {
     }
 }
 
-impl<T: Undoable> Streamable for T {
+impl<T: Undoable> Streamable for T
+where
+    Self::EventType: Clone,
+{
     fn stream_to<S>(&mut self, stream: &mut S)
     where
         S: Stream<Self::EventType>,
     {
-        let changes = mem::take(self.undomanager_mut());
-        stream.stream(changes.into_iter().map(BChange::take_redo));
+        let changes = self.all_changes();
+        stream.stream(changes.into_iter().map(BChange::take_undo));
     }
 }
 
@@ -291,6 +331,7 @@ impl<'a, T: Undoable> Drop for Atomic<'a, T> {
 impl<T, TEvent> Unstreamable for T
 where
     T: Sized + Default + Changable<EventType = TEvent>,
+    T::EventType: Debug,
 {
     fn load<I>(events: I) -> crate::result::Result<Self>
     where
@@ -298,7 +339,8 @@ where
     {
         let mut result = Self::default();
         for e in events {
-            let _ignored_change = result.apply(e);
+            // println!("{}: {:#?}", i, e);
+            let _on_undoable_change = result.apply(e);
         }
 
         Ok(result)
@@ -390,7 +432,7 @@ mod tests {
             self.validate_not_started()?;
 
             let undo = self.apply(Started);
-            self.changes.push(BChange {
+            self.changes.push_undo(BChange {
                 redo: Started,
                 undo,
             });
@@ -415,7 +457,7 @@ mod tests {
                     self.state = event;
                     undo
                 }
-                _ => panic!("not supported"),
+                _ => panic!("not supported {:#?}", (self.state, event)),
             }
         }
     }
@@ -429,12 +471,7 @@ mod tests {
     fn given_stopped() -> TestEntry {
         let sut = TestEntry {
             state: Stopped,
-            changes: vec![BChange {
-                redo: Stopped,
-                undo: Stopped,
-            }]
-            .into_iter()
-            .collect(),
+            changes: UndoManager::<TestEntry>::new(),
         };
 
         assert_eq!(Stopped, sut.state);
@@ -483,7 +520,7 @@ mod tests {
 
         assert_eq!(Stopped, sut.state);
 
-        let changes: Vec<_> = sut.take_changes();
-        assert_eq!(vec![Stopped], changes);
+        let changes = sut.take_changes();
+        assert_eq!(Vec::<TestEvent>::new(), changes);
     }
 }
