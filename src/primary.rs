@@ -134,7 +134,7 @@ where
     where
         T: Clone,
     {
-        applied(Created(row), self)
+        self.applied(Created(row))
     }
 
     pub fn set(&mut self, row: T) -> StdResult<Changes<Self>, NotFound<T>>
@@ -142,7 +142,7 @@ where
         T: Clone,
     {
         if let Some(_) = &self.inner {
-            Ok(applied(Updated(row), self))
+            Ok(self.applied(Updated(row)))
         } else {
             Err(NotFound(row))
         }
@@ -156,7 +156,7 @@ where
         if let Some(existing) = &self.inner {
             let mut modified = existing.clone();
             f(&mut modified);
-            Ok(applied(Updated(modified), self))
+            Ok(self.applied(Updated(modified)))
         } else {
             Err(NotFound(()))
         }
@@ -168,7 +168,7 @@ where
     {
         if let Some(existing) = &self.inner {
             let id = existing.get_id();
-            Ok(applied(Deleted(id), self))
+            Ok(self.applied(Deleted(id)))
         } else {
             Err(NotFound(()))
         }

@@ -10,22 +10,6 @@ pub type BasicChange<T> = BChange<<T as Changable>::EventType>;
 pub type Changes<T> = BChanges<<T as Changable>::EventType>;
 pub type UndoManager<T> = Record<BChange<<T as Changable>::EventType>>;
 
-pub fn applied<S, T>(redo: T, subj: &mut S) -> BChanges<T>
-where
-    S: Changable<EventType = T>,
-    T: Clone,
-{
-    BChanges::only(applied_one(redo, subj))
-}
-
-pub fn applied_one<S, T>(redo: T, subj: &mut S) -> BChange<T>
-where
-    S: Changable<EventType = T>,
-    T: Clone,
-{
-    BChange::applied(redo, |e| subj.apply(e.clone()))
-}
-
 pub trait Identifiable: Sized {
     type IdType: Eq;
 
@@ -166,6 +150,20 @@ pub trait Changable: Sized {
     type EventType;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType;
+
+    fn applied(&mut self, e: Self::EventType) -> BChanges<Self::EventType>
+    where
+        Self::EventType: Clone,
+    {
+        BChanges::only(BChange::applied(e, |e| self.apply(e)))
+    }
+
+    fn applied_one(&mut self, e: Self::EventType) -> BChange<Self::EventType>
+    where
+        Self::EventType: Clone,
+    {
+        BChange::applied(e, |e| self.apply(e))
+    }
 }
 
 pub trait Undoable: Changable + Sized {
@@ -184,7 +182,7 @@ pub trait Undoable: Changable + Sized {
         Self::EventType: Clone,
     {
         if let Some(c) = self.undomanager_mut().undo() {
-            let change = applied_one(c.undo, self);
+            let change = self.applied_one(c.undo);
             self.undomanager_mut().push_redo(change);
             true
         } else {
@@ -197,7 +195,7 @@ pub trait Undoable: Changable + Sized {
         Self::EventType: Clone,
     {
         if let Some(c) = self.undomanager_mut().redo() {
-            let change = applied_one(c.undo, self);
+            let change = self.applied_one(c.undo);
             self.undomanager_mut().push_undo(change);
             true
         } else {
