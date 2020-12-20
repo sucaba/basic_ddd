@@ -151,18 +151,18 @@ pub trait Changable: Sized {
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType;
 
-    fn applied(&mut self, e: Self::EventType) -> BChanges<Self::EventType>
-    where
-        Self::EventType: Clone,
-    {
-        BChanges::only(BChange::applied(e, |e| self.apply(e)))
-    }
-
     fn applied_one(&mut self, e: Self::EventType) -> BChange<Self::EventType>
     where
         Self::EventType: Clone,
     {
         BChange::applied(e, |e| self.apply(e))
+    }
+
+    fn applied(&mut self, e: Self::EventType) -> BChanges<Self::EventType>
+    where
+        Self::EventType: Clone,
+    {
+        BChanges::only(BChange::applied(e, |e| self.apply(e)))
     }
 }
 
