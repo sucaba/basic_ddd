@@ -23,8 +23,7 @@ where
     S: Changable<EventType = T>,
     T: Clone,
 {
-    let undo = subj.apply(redo.clone());
-    BChange { redo, undo }
+    BChange::applied(redo, |e| subj.apply(e.clone()))
 }
 
 pub trait Identifiable: Sized {
@@ -185,8 +184,7 @@ pub trait Undoable: Changable + Sized {
         Self::EventType: Clone,
     {
         if let Some(c) = self.undomanager_mut().undo() {
-            let undo = c.undo.clone();
-            let change = applied_one(undo, self);
+            let change = applied_one(c.undo, self);
             self.undomanager_mut().push_redo(change);
             true
         } else {
@@ -199,8 +197,7 @@ pub trait Undoable: Changable + Sized {
         Self::EventType: Clone,
     {
         if let Some(c) = self.undomanager_mut().redo() {
-            let undo = c.undo.clone();
-            let change = applied_one(undo, self);
+            let change = applied_one(c.undo, self);
             self.undomanager_mut().push_undo(change);
             true
         } else {
@@ -222,17 +219,6 @@ pub trait Undoable: Changable + Sized {
         for _ in 0..n {
             self.redo();
         }
-    }
-
-    fn all_changes(&mut self) -> Vec<BChange<Self::EventType>>
-    where
-        Self::EventType: Clone,
-    {
-        let count = self.undomanager_mut().history_len();
-        self.undo_all();
-        let result = self.undomanager_mut().n_redos(count);
-        self.redo_n(count);
-        result
     }
 
     fn forget_changes(&mut self) {
@@ -259,9 +245,30 @@ where
     fn stream_to<S>(&mut self, stream: &mut S)
     where
         S: Stream<Self::EventType>,
+        Self::EventType: Clone,
     {
-        let changes = self.all_changes();
-        stream.stream(changes.into_iter().map(BChange::take_undo));
+        let changes = UndoRedoStreamingStrategy::streamable_events(self);
+        stream.stream(changes);
+    }
+}
+
+pub struct UndoRedoStreamingStrategy;
+
+impl UndoRedoStreamingStrategy {
+    fn streamable_events<TEvent, U>(undoable: &mut U) -> Vec<TEvent>
+    where
+        U: Undoable<EventType = TEvent>,
+        TEvent: Clone,
+    {
+        let count = undoable.undomanager_mut().history_len();
+        undoable.undo_all();
+        let result = undoable
+            .undomanager_mut()
+            .iter_n_redos(count)
+            .map(|c| c.undo.clone())
+            .collect();
+        undoable.redo_n(count);
+        result
     }
 }
 

@@ -1,4 +1,3 @@
-use super::{BChange, BChanges};
 use std::fmt::Debug;
 use std::iter;
 use std::ops;
@@ -64,14 +63,12 @@ impl<T> Record<T> {
         self.into_iter().map(f).collect()
     }
 
-    pub fn n_redos(&mut self, count: usize) -> Vec<T>
+    pub fn iter_n_redos(&mut self, count: usize) -> impl '_ + Iterator<Item = &T>
     where
         T: Clone,
     {
         let len = self.redos.len();
-        let mut result: Vec<_> = self.redos[(len - count)..len].into();
-        result.reverse();
-        result
+        self.redos[(len - count)..len].iter().rev()
     }
 }
 
@@ -113,12 +110,6 @@ impl<T> iter::FromIterator<T> for Record<T> {
     }
 }
 
-impl<T> From<BChanges<T>> for Record<BChange<T>> {
-    fn from(src: BChanges<T>) -> Self {
-        src.into_iter().collect()
-    }
-}
-
 impl<T> iter::IntoIterator for Record<T> {
     type Item = T;
     type IntoIter = <Vec<T> as iter::IntoIterator>::IntoIter;
@@ -132,21 +123,13 @@ impl<T> iter::IntoIterator for Record<T> {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
-    use TestEvent::*;
 
-    #[non_exhaustive]
-    enum TestEvent {
-        Incremented(usize),
-        Decremented(usize),
-    }
+    struct TestEvent;
 
     #[test]
     fn should_extend_history() {
         let mut sut = Record::new();
-        sut.extend(&[BChange {
-            redo: Incremented(1),
-            undo: Decremented(1),
-        }]);
+        sut.extend(&[TestEvent]);
 
         assert_eq!(sut.history_len(), 1);
     }

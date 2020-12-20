@@ -97,6 +97,7 @@ impl Order {
     /*
      * Add item by preserving inner invariant:
      * `item_count` should match `items.len()`
+     * Item count is limited by `MAX_ORDER_ITEMS`
      */
     fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
         let id = self.id().convert();

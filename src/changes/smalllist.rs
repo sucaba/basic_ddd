@@ -21,10 +21,6 @@ impl<T> SmallList<T> {
         }
     }
 
-    pub fn push(&mut self, item: T) {
-        self.inner.push(item)
-    }
-
     pub fn len(&self) -> usize {
         self.inner.len()
     }

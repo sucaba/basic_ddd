@@ -11,12 +11,33 @@ pub struct BChange<T> {
 }
 
 impl<T> BChange<T> {
+    pub fn applied<F>(redo: T, make_undo: F) -> Self
+    where
+        F: FnOnce(T) -> T,
+        T: Clone,
+    {
+        let undo = make_undo(redo.clone());
+        BChange::new(redo, undo)
+    }
+
+    pub fn new(redo: T, undo: T) -> Self {
+        Self { undo, redo }
+    }
+
     pub fn take_redo(self) -> T {
         self.redo
     }
 
     pub fn take_undo(self) -> T {
         self.undo
+    }
+
+    pub fn redo(&self) -> &T {
+        &self.redo
+    }
+
+    pub fn undo(&self) -> &T {
+        &self.undo
     }
 
     pub fn bubble_up<O, F>(self, f: F) -> BChange<O>
@@ -66,10 +87,6 @@ impl<T> BChanges<T> {
         dest.append(self)
     }
 
-    pub fn push(&mut self, redo: T, undo: T) {
-        self.inner.push(BChange { redo, undo })
-    }
-
     pub fn map<F, O>(self, f: F) -> BChanges<O>
     where
         F: Fn(BChange<T>) -> BChange<O>,
@@ -88,6 +105,12 @@ impl<T> BChanges<T> {
 
     pub fn append<I: IntoIterator<Item = BChange<T>>>(&mut self, iter: I) {
         self.inner.extend(iter)
+    }
+}
+
+impl<T> From<BChanges<T>> for Record<BChange<T>> {
+    fn from(src: BChanges<T>) -> Self {
+        src.into_iter().collect()
     }
 }
 
