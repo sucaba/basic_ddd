@@ -6,9 +6,6 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 use std::rc::Rc;
 
-pub type BasicChange<T> = BChange<<T as Changable>::EventType>;
-pub type Changes<T> = BChanges<<T as Changable>::EventType>;
-
 pub trait Identifiable: Sized {
     type IdType: Eq;
 
@@ -150,18 +147,18 @@ pub trait Changable: Sized {
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType;
 
-    fn applied_one(&mut self, e: Self::EventType) -> BChange<Self::EventType>
+    fn applied_one(&mut self, e: Self::EventType) -> Change<Self::EventType>
     where
         Self::EventType: Clone,
     {
-        BChange::applied(e, |e| self.apply(e))
+        Change::applied(e, |e| self.apply(e))
     }
 
-    fn applied(&mut self, e: Self::EventType) -> BChanges<Self::EventType>
+    fn applied(&mut self, e: Self::EventType) -> Changes<Self::EventType>
     where
         Self::EventType: Clone,
     {
-        BChanges::only(BChange::applied(e, |e| self.apply(e)))
+        Changes::only(Change::applied(e, |e| self.apply(e)))
     }
 }
 
@@ -249,7 +246,7 @@ impl<'a, T: Undoable> Atomic<'a, T> {
 
     pub fn mutate<F, E>(&mut self, f: F) -> Result<(), E>
     where
-        F: FnOnce(&mut T) -> Result<Changes<T>, E>,
+        F: FnOnce(&mut T) -> Result<Changes<T::EventType>, E>,
     {
         let changes = f(self.subj)?;
         self.subj.changes_mut().extend(changes);
@@ -262,7 +259,7 @@ impl<'a, T: Undoable> Atomic<'a, T> {
         bubble_up: B,
     ) -> Result<(), E>
     where
-        M: FnOnce(&mut T) -> Result<BChanges<InnerEvent>, E>,
+        M: FnOnce(&mut T) -> Result<Changes<InnerEvent>, E>,
         B: Clone + Fn(InnerEvent) -> T::EventType,
     {
         let inner_changes = change_inner(self.subj)?;
@@ -332,7 +329,7 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
         mem::take(self.changes_mut());
     }
 
-    fn iter_n_redos(&mut self, count: usize) -> impl '_ + Iterator<Item = &BChange<T::EventType>>
+    fn iter_n_redos(&mut self, count: usize) -> impl '_ + Iterator<Item = &Change<T::EventType>>
     where
         T::EventType: Clone,
     {
@@ -348,7 +345,7 @@ impl<'a, T: Undoable> Drop for Atomic<'a, T> {
             .take_after(self.check_point)
             .collect();
         to_compensate.reverse();
-        for BChange { undo, .. } in to_compensate {
+        for Change { undo, .. } in to_compensate {
             self.subj.apply(undo);
         }
     }
@@ -458,7 +455,7 @@ mod tests {
             self.validate_not_started()?;
 
             let undo = self.apply(Started);
-            self.changes.push_undo(BChange {
+            self.changes.push_undo(Change {
                 redo: Started,
                 undo,
             });

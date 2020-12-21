@@ -1,4 +1,5 @@
 use super::abstractions::*;
+use crate::changes::Changes;
 use crate::result::NotFound;
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
@@ -109,7 +110,7 @@ where
     PrimaryEvent<T>: Sized,
     Id<<T as GetId>::IdentifiableType>: Clone,
 {
-    pub fn new(row: T) -> (Self, Changes<Self>)
+    pub fn new(row: T) -> (Self, Changes<PrimaryEvent<T>>)
     where
         T: Clone,
     {
@@ -130,14 +131,14 @@ where
         self.inner.as_ref()
     }
 
-    pub fn create(&mut self, row: T) -> Changes<Self>
+    pub fn create(&mut self, row: T) -> Changes<PrimaryEvent<T>>
     where
         T: Clone,
     {
         self.applied(Created(row))
     }
 
-    pub fn set(&mut self, row: T) -> StdResult<Changes<Self>, NotFound<T>>
+    pub fn set(&mut self, row: T) -> StdResult<Changes<PrimaryEvent<T>>, NotFound<T>>
     where
         T: Clone,
     {
@@ -148,7 +149,7 @@ where
         }
     }
 
-    pub fn update<F>(&mut self, f: F) -> StdResult<Changes<Self>, NotFound<()>>
+    pub fn update<F>(&mut self, f: F) -> StdResult<Changes<PrimaryEvent<T>>, NotFound<()>>
     where
         F: FnOnce(&mut T),
         T: Clone,
@@ -162,7 +163,7 @@ where
         }
     }
 
-    pub fn delete(&mut self) -> StdResult<Changes<Self>, NotFound<()>>
+    pub fn delete(&mut self) -> StdResult<Changes<PrimaryEvent<T>>, NotFound<()>>
     where
         T: Clone,
     {
@@ -204,7 +205,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::changes::BChange;
+    use crate::changes::Change;
     use pretty_assertions::assert_eq;
 
     #[derive(Debug, Clone, Eq, PartialEq)]
@@ -247,7 +248,7 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![BChange {
+            vec![Change {
                 redo: Updated(MyEntity {
                     id: ID,
                     name: "bar".into()
@@ -269,7 +270,7 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![BChange {
+            vec![Change {
                 redo: Updated(MyEntity {
                     id: ID,
                     name: "bar".into()
@@ -291,7 +292,7 @@ mod tests {
         assert_eq!(sut.try_get(), None);
         assert_eq!(
             changes,
-            vec![BChange {
+            vec![Change {
                 redo: Deleted(
                     (MyEntity {
                         id: ID,

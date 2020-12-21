@@ -1,5 +1,6 @@
 // TODO: Remove std::hash references
 use super::abstractions::*;
+use crate::changes::Changes;
 use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
@@ -270,7 +271,7 @@ where
         self.inner.len()
     }
 
-    pub fn update_or_add(&mut self, item: T) -> Changes<Self>
+    pub fn update_or_add(&mut self, item: T) -> Changes<OwnedEvent<T>>
     where
         T: fmt::Debug,
     {
@@ -282,7 +283,7 @@ where
     /**
      * Updates existing item or returns item back as a Result::Err
      */
-    pub fn update(&mut self, item: T) -> StdResult<Changes<Self>, NotFound<T>> {
+    pub fn update(&mut self, item: T) -> StdResult<Changes<OwnedEvent<T>>, NotFound<T>> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
             Ok(self.applied(Updated(pos, item)))
         } else {
@@ -294,7 +295,7 @@ where
      * Inserts a new item and returns `Ok(())` if item with the same id does not exist.
      * Returns `Err(item)` if item with the same already exists.
      */
-    pub fn add_new(&mut self, item: T) -> StdResult<Changes<Self>, AlreadyExists<T>> {
+    pub fn add_new(&mut self, item: T) -> StdResult<Changes<OwnedEvent<T>>, AlreadyExists<T>> {
         let id = item.get_id();
         if let None = self.position_by_id(&id) {
             Ok(self.applied(Created(item)))
@@ -310,7 +311,7 @@ where
     pub fn remove(
         &mut self,
         item: &T,
-    ) -> StdResult<Changes<Self>, NotFound<Id<T::IdentifiableType>>> {
+    ) -> StdResult<Changes<OwnedEvent<T>>, NotFound<Id<T::IdentifiableType>>> {
         let id = item.get_id();
         match self.remove_by_id(&id) {
             Err(_) => Err(NotFound(id)),
@@ -321,7 +322,7 @@ where
     pub fn remove_by_id<'a>(
         &mut self,
         id: &'a Id<T::IdentifiableType>,
-    ) -> StdResult<Changes<Self>, NotFound<&'a Id<T::IdentifiableType>>> {
+    ) -> StdResult<Changes<OwnedEvent<T>>, NotFound<&'a Id<T::IdentifiableType>>> {
         if let Some(_) = self.position_by_id(id) {
             Ok(self.applied(Deleted(id.clone())))
         } else {
@@ -334,7 +335,7 @@ where
 mod owned_collection_tests {
 
     use super::*;
-    use crate::changes::BChange;
+    use crate::changes::Change;
     use pretty_assertions::assert_eq;
     use std::cmp::{Eq, PartialEq};
     use std::rc::Rc;
@@ -418,7 +419,7 @@ mod owned_collection_tests {
     fn creation_event_is_streamed() {
         let mut sut = setup();
 
-        let mut changes = Changes::<Sut>::new();
+        let mut changes = Changes::<OwnedEvent<Rc<TestEntry>>>::new();
 
         changes.append(sut.update_or_add(colored(1, Red)));
         changes.append(sut.update_or_add(colored(2, Red)));
@@ -426,8 +427,8 @@ mod owned_collection_tests {
         assert_eq!(
             sorted(changes.into()),
             vec![
-                BChange::new(Created(colored(1, Red)), Deleted(colored(1, Red).get_id())),
-                BChange::new(Created(colored(2, Red)), Deleted(colored(2, Red).get_id()))
+                Change::new(Created(colored(1, Red)), Deleted(colored(1, Red).get_id())),
+                Change::new(Created(colored(2, Red)), Deleted(colored(2, Red).get_id()))
             ]
         );
     }
@@ -440,7 +441,7 @@ mod owned_collection_tests {
 
         assert_eq!(
             changes,
-            vec![BChange::new(
+            vec![Change::new(
                 Updated(EXISTING_POS, colored(EXISTING_ID, Red)),
                 Updated(EXISTING_POS, colored(EXISTING_ID, None))
             )]
@@ -460,16 +461,14 @@ mod owned_collection_tests {
 
         assert_eq!(
             changes,
-            vec![BChange::new(
+            vec![Change::new(
                 Deleted(colored(EXISTING_ID, Red).get_id()),
                 Created(colored(EXISTING_ID, None))
             )]
         );
     }
 
-    fn sorted<T>(
-        mut events: Vec<BasicChange<OwnedCollection<T>>>,
-    ) -> Vec<BasicChange<OwnedCollection<T>>>
+    fn sorted<T>(mut events: Vec<Change<OwnedEvent<T>>>) -> Vec<Change<OwnedEvent<T>>>
     where
         T: GetId + Clone,
         T::IdentifiableType: Owned,

@@ -5,19 +5,19 @@ pub use record::*;
 use smalllist::SmallList;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct BChange<T> {
+pub struct Change<T> {
     pub redo: T,
     pub undo: T,
 }
 
-impl<T> BChange<T> {
+impl<T> Change<T> {
     pub fn applied<F>(redo: T, make_undo: F) -> Self
     where
         F: FnOnce(T) -> T,
         T: Clone,
     {
         let undo = make_undo(redo.clone());
-        BChange::new(redo, undo)
+        Change::new(redo, undo)
     }
 
     pub fn new(redo: T, undo: T) -> Self {
@@ -40,11 +40,11 @@ impl<T> BChange<T> {
         &self.undo
     }
 
-    pub fn bubble_up<O, F>(self, f: F) -> BChange<O>
+    pub fn bubble_up<O, F>(self, f: F) -> Change<O>
     where
         F: Fn(T) -> O,
     {
-        BChange {
+        Change {
             redo: f(self.redo),
             undo: f(self.undo),
         }
@@ -52,18 +52,18 @@ impl<T> BChange<T> {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct BChanges<T> {
-    inner: SmallList<BChange<T>>,
+pub struct Changes<T> {
+    inner: SmallList<Change<T>>,
 }
 
-impl<T> BChanges<T> {
+impl<T> Changes<T> {
     pub fn new() -> Self {
-        BChanges {
+        Changes {
             inner: SmallList::new(),
         }
     }
 
-    pub fn only(item: BChange<T>) -> Self {
+    pub fn only(item: Change<T>) -> Self {
         Self {
             inner: SmallList::once(item),
         }
@@ -73,7 +73,7 @@ impl<T> BChanges<T> {
         self.inner.len()
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, BChange<T>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Change<T>> {
         self.inner.iter()
     }
 
@@ -87,36 +87,36 @@ impl<T> BChanges<T> {
         dest.append(self)
     }
 
-    pub fn map<F, O>(self, f: F) -> BChanges<O>
+    pub fn map<F, O>(self, f: F) -> Changes<O>
     where
-        F: Fn(BChange<T>) -> BChange<O>,
+        F: Fn(Change<T>) -> Change<O>,
     {
-        self.into_iter().map(f).collect::<BChanges<O>>()
+        self.into_iter().map(f).collect::<Changes<O>>()
     }
 
-    pub fn bubble_up<O, F>(self, f: F) -> BChanges<O>
+    pub fn bubble_up<O, F>(self, f: F) -> Changes<O>
     where
         F: Clone + Fn(T) -> O,
     {
         self.into_iter()
             .map(move |ch| ch.bubble_up(f.clone()))
-            .collect::<BChanges<O>>()
+            .collect::<Changes<O>>()
     }
 
-    pub fn append<I: IntoIterator<Item = BChange<T>>>(&mut self, iter: I) {
+    pub fn append<I: IntoIterator<Item = Change<T>>>(&mut self, iter: I) {
         self.inner.extend(iter)
     }
 }
 
-impl<T> From<BChanges<T>> for Record<T> {
-    fn from(src: BChanges<T>) -> Self {
+impl<T> From<Changes<T>> for Record<T> {
+    fn from(src: Changes<T>) -> Self {
         src.into_iter().collect()
     }
 }
 
-impl<T, I> std::ops::Index<I> for BChanges<T>
+impl<T, I> std::ops::Index<I> for Changes<T>
 where
-    I: std::slice::SliceIndex<[BChange<T>]>,
+    I: std::slice::SliceIndex<[Change<T>]>,
 {
     type Output = I::Output;
 
@@ -125,23 +125,23 @@ where
     }
 }
 
-impl<T> Into<Vec<BChange<T>>> for BChanges<T> {
-    fn into(self) -> Vec<BChange<T>> {
+impl<T> Into<Vec<Change<T>>> for Changes<T> {
+    fn into(self) -> Vec<Change<T>> {
         self.inner.into_iter().collect()
     }
 }
 
-impl<T> std::iter::FromIterator<BChange<T>> for BChanges<T> {
-    fn from_iter<I: IntoIterator<Item = BChange<T>>>(iter: I) -> Self {
+impl<T> std::iter::FromIterator<Change<T>> for Changes<T> {
+    fn from_iter<I: IntoIterator<Item = Change<T>>>(iter: I) -> Self {
         Self {
             inner: iter.into_iter().collect(),
         }
     }
 }
 
-impl<T> std::iter::IntoIterator for BChanges<T> {
-    type Item = BChange<T>;
-    type IntoIter = <Vec<BChange<T>> as std::iter::IntoIterator>::IntoIter;
+impl<T> std::iter::IntoIterator for Changes<T> {
+    type Item = Change<T>;
+    type IntoIter = <Vec<Change<T>> as std::iter::IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()

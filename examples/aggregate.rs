@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use basic_ddd::{
     Changable, Changes, Error, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection,
-    OwnedEvent, Primary, PrimaryEvent, Record, Result, Save, Streamable, Undoable,
+    Primary, Record, Result, Save, Streamable, Undoable,
 };
 
 fn main() -> Result<()> {
@@ -28,21 +28,17 @@ fn main() -> Result<()> {
 }
 
 fn create_new_order(id: i32) -> Result<Order> {
-    let mut aggregate = Order::new(OrderPrimary {
+    let mut order = Order::new(OrderPrimary {
         id,
         item_count: 777, // ignored
     });
-    aggregate.add_new_item(OrderItem { id: 1001 }.into())?;
-    aggregate.add_new_item(OrderItem { id: 1002 }.into())?;
-    let _may_be_added = aggregate.add_new_item(OrderItem { id: 1003 }.into());
-    assert_eq!(aggregate.item_count(), 2);
+    order.add_new_item(OrderItem { id: 1001 }.into())?;
+    order.add_new_item(OrderItem { id: 1002 }.into())?;
+    let _may_be_added = order.add_new_item(OrderItem { id: 1003 }.into());
+    assert_eq!(order.item_count(), 2);
 
-    Ok(aggregate)
+    Ok(order)
 }
-
-type OrderItems = OwnedCollection<Rc<OrderItem>>;
-type OrderPrimaryEvent = PrimaryEvent<OrderPrimary>;
-type OrderItemEvent = OwnedEvent<Rc<OrderItem>>;
 
 const MAX_ORDER_ITEMS: usize = 2;
 
@@ -82,7 +78,7 @@ impl Order {
         primary.item_count = 0;
 
         let (primary, changes) = Primary::new(primary);
-        let top_changes: Changes<Order> = changes.bubble_up(OrderEvent::Primary);
+        let top_changes: Changes<OrderEvent> = changes.bubble_up(OrderEvent::Primary);
         Self {
             primary,
             items: Default::default(),
