@@ -108,7 +108,7 @@ impl<T> BChanges<T> {
     }
 }
 
-impl<T> From<BChanges<T>> for Record<BChange<T>> {
+impl<T> From<BChanges<T>> for Record<T> {
     fn from(src: BChanges<T>) -> Self {
         src.into_iter().collect()
     }

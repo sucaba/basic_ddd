@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 pub type BasicChange<T> = BChange<<T as Changable>::EventType>;
 pub type Changes<T> = BChanges<<T as Changable>::EventType>;
-pub type UndoManager<T> = Record<BChange<<T as Changable>::EventType>>;
+pub type UndoManager<T> = Record<<T as Changable>::EventType>;
 
 pub trait Identifiable: Sized {
     type IdType: Eq;
@@ -167,7 +167,7 @@ pub trait Changable: Sized {
 }
 
 pub trait Undoable: Changable + Sized {
-    fn changes_mut(&mut self) -> &mut UndoManager<Self>;
+    fn changes_mut(&mut self) -> &mut Record<Self::EventType>;
 
     fn begin_changes(&mut self) -> Atomic<'_, Self> {
         let check_point = self.changes_mut().history_len();
@@ -283,7 +283,7 @@ pub struct UndoRedoOps<'a, T: Undoable> {
 }
 
 impl<'a, T: Undoable> UndoRedoOps<'a, T> {
-    fn changes_mut(&mut self) -> &mut Record<BChange<T::EventType>> {
+    fn changes_mut(&mut self) -> &mut Record<T::EventType> {
         self.subj.changes_mut()
     }
 
@@ -338,7 +338,7 @@ impl<'a, T: Undoable> UndoRedoOps<'a, T> {
         count: usize,
     ) -> impl '_ + Iterator<Item = &BChange<T::EventType>>
     where
-        BChange<T::EventType>: Clone,
+        T::EventType: Clone,
     {
         self.changes_mut().iter_n_redos(count)
     }
