@@ -64,7 +64,7 @@ impl<T> Record<T> {
         self.into_iter().map(f).collect()
     }
 
-    pub fn iter_n_redos(&mut self, count: usize) -> impl '_ + Iterator<Item = &BChange<T>>
+    pub(crate) fn iter_n_redos(&mut self, count: usize) -> impl '_ + Iterator<Item = &BChange<T>>
     where
         T: Clone,
     {

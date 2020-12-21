@@ -8,7 +8,6 @@ use std::rc::Rc;
 
 pub type BasicChange<T> = BChange<<T as Changable>::EventType>;
 pub type Changes<T> = BChanges<<T as Changable>::EventType>;
-pub type UndoManager<T> = Record<<T as Changable>::EventType>;
 
 pub trait Identifiable: Sized {
     type IdType: Eq;
@@ -177,8 +176,8 @@ pub trait Undoable: Changable + Sized {
         }
     }
 
-    fn undo_redo_ops(&mut self) -> UndoRedoOps<'_, Self> {
-        UndoRedoOps { subj: self }
+    fn undo_manager(&mut self) -> UndoManager<'_, Self> {
+        UndoManager { subj: self }
     }
 
     fn forget_changes(&mut self) {
@@ -221,7 +220,7 @@ impl UndoRedoStreamingStrategy {
         U::EventType: Clone,
     {
         let count = undoable.changes_mut().history_len();
-        let mut ops = undoable.undo_redo_ops();
+        let mut ops = undoable.undo_manager();
         ops.undo_all();
         let result = ops.iter_n_redos(count).map(|c| c.undo.clone()).collect();
         ops.redo_n(count);
@@ -278,11 +277,11 @@ impl<'a, T: Undoable> Atomic<'a, T> {
     }
 }
 
-pub struct UndoRedoOps<'a, T: Undoable> {
+pub struct UndoManager<'a, T: Undoable> {
     subj: &'a mut T,
 }
 
-impl<'a, T: Undoable> UndoRedoOps<'a, T> {
+impl<'a, T: Undoable> UndoManager<'a, T> {
     fn changes_mut(&mut self) -> &mut Record<T::EventType> {
         self.subj.changes_mut()
     }
@@ -333,10 +332,7 @@ impl<'a, T: Undoable> UndoRedoOps<'a, T> {
         mem::take(self.changes_mut());
     }
 
-    pub fn iter_n_redos(
-        &mut self,
-        count: usize,
-    ) -> impl '_ + Iterator<Item = &BChange<T::EventType>>
+    fn iter_n_redos(&mut self, count: usize) -> impl '_ + Iterator<Item = &BChange<T::EventType>>
     where
         T::EventType: Clone,
     {
@@ -346,12 +342,6 @@ impl<'a, T: Undoable> UndoRedoOps<'a, T> {
 
 impl<'a, T: Undoable> Drop for Atomic<'a, T> {
     fn drop(&mut self) {
-        /*
-        for _ in 0..self.check_point {
-            self.undo_without_redo()
-        }
-        */
-
         let mut to_compensate: Vec<_> = self
             .subj
             .changes_mut()
@@ -440,7 +430,7 @@ mod tests {
     #[derive(Debug, Eq, PartialEq)]
     struct TestEntry {
         state: TestEvent,
-        changes: UndoManager<TestEntry>,
+        changes: Record<TestEvent>,
     }
 
     #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -499,7 +489,7 @@ mod tests {
     }
 
     impl Undoable for TestEntry {
-        fn changes_mut(&mut self) -> &mut UndoManager<Self> {
+        fn changes_mut(&mut self) -> &mut Record<Self::EventType> {
             &mut self.changes
         }
     }
@@ -507,7 +497,7 @@ mod tests {
     fn given_stopped() -> TestEntry {
         let sut = TestEntry {
             state: Stopped,
-            changes: UndoManager::<TestEntry>::new(),
+            changes: Record::new(),
         };
 
         assert_eq!(Stopped, sut.state);
@@ -528,7 +518,7 @@ mod tests {
         let mut sut = given_stopped();
 
         sut.start().unwrap();
-        let mut ops = sut.undo_redo_ops();
+        let mut ops = sut.undo_manager();
         ops.undo();
 
         assert_eq!(sut.state, Stopped);
@@ -540,7 +530,7 @@ mod tests {
 
         sut.start().unwrap();
 
-        let mut ops = sut.undo_redo_ops();
+        let mut ops = sut.undo_manager();
 
         ops.undo();
 

@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use basic_ddd::{
     Changable, Changes, Error, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection,
-    OwnedEvent, Primary, PrimaryEvent, Result, Save, Streamable, UndoManager, Undoable,
+    OwnedEvent, Primary, PrimaryEvent, Record, Result, Save, Streamable, Undoable,
 };
 
 fn main() -> Result<()> {
@@ -54,7 +54,7 @@ where
     primary: Primary<OrderPrimary>,
     items: OwnedCollection<Rc<OrderItem>>,
 
-    changes: UndoManager<Order>,
+    changes: Record<OrderEvent>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -150,7 +150,7 @@ impl Changable for Order {
 }
 
 impl Undoable for Order {
-    fn changes_mut(&mut self) -> &mut UndoManager<Self> {
+    fn changes_mut(&mut self) -> &mut Record<Self::EventType> {
         &mut self.changes
     }
 }
