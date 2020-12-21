@@ -150,7 +150,7 @@ impl Changable for Order {
 }
 
 impl Undoable for Order {
-    fn undomanager_mut(&mut self) -> &mut UndoManager<Self> {
+    fn changes_mut(&mut self) -> &mut UndoManager<Self> {
         &mut self.changes
     }
 }

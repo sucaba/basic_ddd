@@ -167,60 +167,22 @@ pub trait Changable: Sized {
 }
 
 pub trait Undoable: Changable + Sized {
-    fn undomanager_mut(&mut self) -> &mut UndoManager<Self>;
+    fn changes_mut(&mut self) -> &mut UndoManager<Self>;
 
     fn begin_changes(&mut self) -> Atomic<'_, Self> {
-        let check_point = self.undomanager_mut().history_len();
+        let check_point = self.changes_mut().history_len();
         Atomic {
             subj: self,
             check_point,
         }
     }
 
-    fn undo(&mut self) -> bool
-    where
-        Self::EventType: Clone,
-    {
-        if let Some(c) = self.undomanager_mut().undo() {
-            let change = self.applied_one(c.undo);
-            self.undomanager_mut().push_redo(change);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn redo(&mut self) -> bool
-    where
-        Self::EventType: Clone,
-    {
-        if let Some(c) = self.undomanager_mut().redo() {
-            let change = self.applied_one(c.undo);
-            self.undomanager_mut().push_undo(change);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn undo_all(&mut self)
-    where
-        Self::EventType: Clone,
-    {
-        while self.undo() {}
-    }
-
-    fn redo_n(&mut self, n: usize)
-    where
-        Self::EventType: Clone,
-    {
-        for _ in 0..n {
-            self.redo();
-        }
+    fn undo_redo_ops(&mut self) -> UndoRedoOps<'_, Self> {
+        UndoRedoOps { subj: self }
     }
 
     fn forget_changes(&mut self) {
-        mem::take(self.undomanager_mut());
+        mem::take(self.changes_mut());
     }
 }
 
@@ -253,19 +215,16 @@ where
 pub struct UndoRedoStreamingStrategy;
 
 impl UndoRedoStreamingStrategy {
-    fn streamable_events<TEvent, U>(undoable: &mut U) -> Vec<TEvent>
+    fn streamable_events<U>(undoable: &mut U) -> Vec<U::EventType>
     where
-        U: Undoable<EventType = TEvent>,
-        TEvent: Clone,
+        U: Undoable,
+        U::EventType: Clone,
     {
-        let count = undoable.undomanager_mut().history_len();
-        undoable.undo_all();
-        let result = undoable
-            .undomanager_mut()
-            .iter_n_redos(count)
-            .map(|c| c.undo.clone())
-            .collect();
-        undoable.redo_n(count);
+        let count = undoable.changes_mut().history_len();
+        let mut ops = undoable.undo_redo_ops();
+        ops.undo_all();
+        let result = ops.iter_n_redos(count).map(|c| c.undo.clone()).collect();
+        ops.redo_n(count);
         result
     }
 }
@@ -294,7 +253,7 @@ impl<'a, T: Undoable> Atomic<'a, T> {
         F: FnOnce(&mut T) -> Result<Changes<T>, E>,
     {
         let changes = f(self.subj)?;
-        self.subj.undomanager_mut().extend(changes);
+        self.subj.changes_mut().extend(changes);
         Ok(())
     }
 
@@ -309,7 +268,7 @@ impl<'a, T: Undoable> Atomic<'a, T> {
     {
         let inner_changes = change_inner(self.subj)?;
         let changes = inner_changes.bubble_up(bubble_up);
-        self.subj.undomanager_mut().extend(changes);
+        self.subj.changes_mut().extend(changes);
 
         Ok(())
     }
@@ -319,11 +278,83 @@ impl<'a, T: Undoable> Atomic<'a, T> {
     }
 }
 
+pub struct UndoRedoOps<'a, T: Undoable> {
+    subj: &'a mut T,
+}
+
+impl<'a, T: Undoable> UndoRedoOps<'a, T> {
+    fn changes_mut(&mut self) -> &mut Record<BChange<T::EventType>> {
+        self.subj.changes_mut()
+    }
+
+    pub fn undo(&mut self) -> bool
+    where
+        T::EventType: Clone,
+    {
+        if let Some(c) = self.changes_mut().undo() {
+            let change = self.subj.applied_one(c.undo);
+            self.changes_mut().push_redo(change);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn redo(&mut self) -> bool
+    where
+        T::EventType: Clone,
+    {
+        if let Some(c) = self.changes_mut().redo() {
+            let change = self.subj.applied_one(c.undo);
+            self.changes_mut().push_undo(change);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn undo_all(&mut self)
+    where
+        T::EventType: Clone,
+    {
+        while self.undo() {}
+    }
+
+    pub fn redo_n(&mut self, n: usize)
+    where
+        T::EventType: Clone,
+    {
+        for _ in 0..n {
+            self.redo();
+        }
+    }
+
+    pub fn forget_changes(&mut self) {
+        mem::take(self.changes_mut());
+    }
+
+    pub fn iter_n_redos(
+        &mut self,
+        count: usize,
+    ) -> impl '_ + Iterator<Item = &BChange<T::EventType>>
+    where
+        BChange<T::EventType>: Clone,
+    {
+        self.changes_mut().iter_n_redos(count)
+    }
+}
+
 impl<'a, T: Undoable> Drop for Atomic<'a, T> {
     fn drop(&mut self) {
+        /*
+        for _ in 0..self.check_point {
+            self.undo_without_redo()
+        }
+        */
+
         let mut to_compensate: Vec<_> = self
             .subj
-            .undomanager_mut()
+            .changes_mut()
             .take_after(self.check_point)
             .collect();
         to_compensate.reverse();
@@ -468,7 +499,7 @@ mod tests {
     }
 
     impl Undoable for TestEntry {
-        fn undomanager_mut(&mut self) -> &mut UndoManager<Self> {
+        fn changes_mut(&mut self) -> &mut UndoManager<Self> {
             &mut self.changes
         }
     }
@@ -497,7 +528,8 @@ mod tests {
         let mut sut = given_stopped();
 
         sut.start().unwrap();
-        sut.undo();
+        let mut ops = sut.undo_redo_ops();
+        ops.undo();
 
         assert_eq!(sut.state, Stopped);
     }
@@ -507,9 +539,12 @@ mod tests {
         let mut sut = given_stopped();
 
         sut.start().unwrap();
-        sut.undo();
 
-        sut.redo();
+        let mut ops = sut.undo_redo_ops();
+
+        ops.undo();
+
+        ops.redo();
 
         assert_eq!(sut.state, Started);
     }
