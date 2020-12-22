@@ -204,6 +204,7 @@ where
         Self::EventType: Clone,
     {
         let mut strategy = UndoRedoStreamingStrategy::new(self);
+        // TODO: Pass events references and not values
         stream.stream(strategy.events().into_iter().cloned());
     }
 }
@@ -228,10 +229,7 @@ where
     }
 
     fn events(&mut self) -> impl IntoIterator<Item = &U::EventType> {
-        self.um
-            .iter_n_redos(self.count)
-            .map(|c| &c.undo)
-            .collect::<Vec<_>>()
+        self.um.iter_n_redos(self.count).map(|c| c.undo())
     }
 }
 
