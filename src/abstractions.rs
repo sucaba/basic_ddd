@@ -173,7 +173,7 @@ pub trait Undoable: Changable + Sized {
         }
     }
 
-    fn undo_manager(&mut self) -> UndoManager<'_, Self> {
+    fn undo_manager<'a>(&'a mut self) -> UndoManager<'a, Self> {
         UndoManager { subj: self }
     }
 
@@ -203,25 +203,44 @@ where
         S: Stream<Self::EventType>,
         Self::EventType: Clone,
     {
-        let changes = UndoRedoStreamingStrategy::streamable_events(self);
-        stream.stream(changes);
+        let mut strategy = UndoRedoStreamingStrategy::new(self);
+        stream.stream(strategy.events().into_iter().cloned());
     }
 }
 
-pub struct UndoRedoStreamingStrategy;
+pub struct UndoRedoStreamingStrategy<'a, U: Undoable>
+where
+    U::EventType: Clone,
+{
+    um: UndoManager<'a, U>,
+    count: usize,
+}
 
-impl UndoRedoStreamingStrategy {
-    fn streamable_events<U>(undoable: &mut U) -> Vec<U::EventType>
-    where
-        U: Undoable,
-        U::EventType: Clone,
-    {
+impl<'a, U: Undoable> UndoRedoStreamingStrategy<'a, U>
+where
+    U::EventType: Clone,
+{
+    fn new(undoable: &'a mut U) -> Self {
         let count = undoable.changes_mut().history_len();
-        let mut ops = undoable.undo_manager();
-        ops.undo_all();
-        let result = ops.iter_n_redos(count).map(|c| c.undo.clone()).collect();
-        ops.redo_n(count);
-        result
+        let mut um = undoable.undo_manager();
+        um.undo_all();
+        Self { um, count }
+    }
+
+    fn events(&mut self) -> impl IntoIterator<Item = &U::EventType> {
+        self.um
+            .iter_n_redos(self.count)
+            .map(|c| &c.undo)
+            .collect::<Vec<_>>()
+    }
+}
+
+impl<'a, U: Undoable> Drop for UndoRedoStreamingStrategy<'a, U>
+where
+    U::EventType: Clone,
+{
+    fn drop(&mut self) {
+        self.um.redo_n(self.count);
     }
 }
 

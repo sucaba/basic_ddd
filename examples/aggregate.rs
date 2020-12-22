@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use basic_ddd::{
     Changable, Changes, Error, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection,
-    Primary, Record, Result, Save, Streamable, Undoable,
+    Primary, Record, Result, Save, Undoable,
 };
 
 fn main() -> Result<()> {
@@ -32,9 +32,9 @@ fn create_new_order(id: i32) -> Result<Order> {
         id,
         item_count: 777, // ignored
     });
-    order.add_new_item(OrderItem { id: 1001 }.into())?;
-    order.add_new_item(OrderItem { id: 1002 }.into())?;
-    let _may_be_added = order.add_new_item(OrderItem { id: 1003 }.into());
+    order.add_new_item(OrderItem { id: 1001 })?;
+    order.add_new_item(OrderItem { id: 1002 })?;
+    let _may_be_added = order.add_new_item(OrderItem { id: 1003 });
     assert_eq!(order.item_count(), 2);
 
     Ok(order)
@@ -43,10 +43,7 @@ fn create_new_order(id: i32) -> Result<Order> {
 const MAX_ORDER_ITEMS: usize = 2;
 
 #[derive(Default, Debug, Eq, PartialEq, Clone)]
-struct Order
-where
-    Self: Streamable,
-{
+struct Order {
     primary: Primary<OrderPrimary>,
     items: OwnedCollection<Rc<OrderItem>>,
 
@@ -95,7 +92,8 @@ impl Order {
      * `item_count` should match `items.len()`
      * Item count is limited by `MAX_ORDER_ITEMS`
      */
-    fn add_new_item(&mut self, item: Rc<OrderItem>) -> Result<()> {
+    fn add_new_item(&mut self, item: impl Into<Rc<OrderItem>>) -> Result<()> {
+        let item = item.into();
         let id = self.id().convert();
 
         let mut trx = self.begin_changes();
