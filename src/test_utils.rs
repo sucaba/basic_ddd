@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::abstractions::Streamable;
+use crate::streamable::Streamable;
 
 pub(crate) trait AssumeChangesSaved {
     fn assume_changes_saved(&mut self);

@@ -1,5 +1,7 @@
-use crate::abstractions::{Changable, Id, Identifiable, StreamAdapter, Streamable, Unstreamable};
+use crate::changable::Changable;
+use crate::identifiable::{Id, Identifiable};
 use crate::result::Result;
+use crate::streamable::{StreamAdapter, Streamable, Unstreamable};
 use std::fmt;
 
 pub trait Load<T>

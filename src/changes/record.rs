@@ -41,6 +41,15 @@ impl<T> Record<T> {
         self.undos.drain(range)
     }
 
+    pub fn make_applied<F>(entry: T, make_undo: F) -> Change<T>
+    where
+        F: FnOnce(T) -> T,
+        T: Clone,
+    {
+        let undo = make_undo(entry.clone());
+        Change::new(entry, undo)
+    }
+
     pub fn push_undo(&mut self, entry: Change<T>) {
         self.undos.push(entry)
     }
@@ -49,27 +58,20 @@ impl<T> Record<T> {
         self.redos.push(entry)
     }
 
-    pub fn undo(&mut self) -> Option<Change<T>> {
+    pub fn pop_undo(&mut self) -> Option<Change<T>> {
         self.undos.pop()
     }
 
-    pub fn redo(&mut self) -> Option<Change<T>> {
+    pub fn pop_redo(&mut self) -> Option<Change<T>> {
         self.redos.pop()
     }
 
-    pub fn map<F, O>(self, f: F) -> Record<O>
-    where
-        F: Fn(Change<T>) -> Change<O>,
-    {
-        self.into_iter().map(f).collect()
-    }
-
-    pub(crate) fn iter_n_redos(&mut self, count: usize) -> impl '_ + Iterator<Item = &Change<T>>
-    where
-        T: Clone,
-    {
+    pub fn iter_last_redos(
+        &mut self,
+        count: usize,
+    ) -> impl '_ + DoubleEndedIterator<Item = &Change<T>> {
         let len = self.redos.len();
-        self.redos[(len - count)..len].iter().rev()
+        self.redos[(len - count)..len].iter()
     }
 }
 
@@ -130,10 +132,7 @@ mod tests {
     #[test]
     fn should_extend_history() {
         let mut sut = Record::new();
-        sut.extend(vec![Change {
-            redo: TestEvent,
-            undo: TestEvent,
-        }]);
+        sut.extend(vec![Change::new(TestEvent, TestEvent)]);
 
         assert_eq!(sut.history_len(), 1);
     }

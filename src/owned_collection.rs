@@ -1,5 +1,6 @@
 // TODO: Remove std::hash references
-use super::abstractions::*;
+use super::changable::*;
+use super::identifiable::*;
 use crate::changes::Changes;
 use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
@@ -55,6 +56,11 @@ where
             _ => panic!("cannot combine events"),
         }
     }
+}
+
+pub enum EventMergeResult {
+    Combined,
+    Annihilated,
 }
 
 impl<T> fmt::Debug for OwnedEvent<T>

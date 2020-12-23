@@ -1,4 +1,5 @@
-use super::abstractions::*;
+use super::changable::Changable;
+use super::identifiable::*;
 use crate::changes::Changes;
 use crate::result::NotFound;
 use std::cmp::{Eq, PartialEq};
