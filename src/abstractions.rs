@@ -305,7 +305,7 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
         T::EventType: Clone,
     {
         if let Some(c) = self.changes_mut().undo() {
-            let change = self.subj.applied_one(c.undo);
+            let change = self.subj.applied_one(c.take_undo());
             self.changes_mut().push_redo(change);
             true
         } else {
@@ -318,7 +318,7 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
         T::EventType: Clone,
     {
         if let Some(c) = self.changes_mut().redo() {
-            let change = self.subj.applied_one(c.undo);
+            let change = self.subj.applied_one(c.take_undo());
             self.changes_mut().push_undo(change);
             true
         } else {
@@ -362,8 +362,8 @@ impl<'a, T: Undoable> Drop for Atomic<'a, T> {
             .take_after(self.check_point)
             .collect();
         to_compensate.reverse();
-        for Change { undo, .. } in to_compensate {
-            self.subj.apply(undo);
+        for c in to_compensate {
+            self.subj.apply(c.take_undo());
         }
     }
 }
@@ -472,10 +472,7 @@ mod tests {
             self.validate_not_started()?;
 
             let undo = self.apply(Started);
-            self.changes.push_undo(Change {
-                redo: Started,
-                undo,
-            });
+            self.changes.push_undo(Change::new(Started, undo));
             Ok(())
         }
 

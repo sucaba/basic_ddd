@@ -11,7 +11,7 @@ impl<T> SmallList<T> {
         Self { inner: Vec::new() }
     }
 
-    pub fn once(item: T) -> Self {
+    pub fn only(item: T) -> Self {
         Self { inner: vec![item] }
     }
 

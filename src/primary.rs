@@ -62,15 +62,11 @@ where
 
 pub struct Primary<T: GetId> {
     inner: Option<T>,
-    complete: bool,
 }
 
 impl<T: GetId> Default for Primary<T> {
     fn default() -> Self {
-        Self {
-            inner: None,
-            complete: true,
-        }
+        Self { inner: None }
     }
 }
 
@@ -82,7 +78,6 @@ where
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            complete: self.complete,
         }
     }
 }
@@ -114,10 +109,7 @@ where
     where
         T: Clone,
     {
-        let mut result = Self {
-            inner: None,
-            complete: true,
-        };
+        let mut result = Self { inner: None };
 
         let changes = result.create(row);
         (result, changes)
@@ -248,16 +240,16 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![Change {
-                redo: Updated(MyEntity {
+            vec![Change::new(
+                Updated(MyEntity {
                     id: ID,
                     name: "bar".into()
                 }),
-                undo: Updated(MyEntity {
+                Updated(MyEntity {
                     id: ID,
                     name: "foo".into()
                 })
-            }]
+            )]
         );
     }
 
@@ -270,16 +262,16 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![Change {
-                redo: Updated(MyEntity {
+            vec![Change::new(
+                Updated(MyEntity {
                     id: ID,
                     name: "bar".into()
                 }),
-                undo: Updated(MyEntity {
+                Updated(MyEntity {
                     id: ID,
                     name: "foo".into()
                 })
-            }]
+            )]
         );
     }
 
@@ -292,19 +284,19 @@ mod tests {
         assert_eq!(sut.try_get(), None);
         assert_eq!(
             changes,
-            vec![Change {
-                redo: Deleted(
+            vec![Change::new(
+                Deleted(
                     (MyEntity {
                         id: ID,
                         name: "foo".into()
                     })
                     .get_id()
                 ),
-                undo: Created(MyEntity {
+                Created(MyEntity {
                     id: ID,
                     name: "foo".into()
                 })
-            }]
+            )]
         );
     }
 }

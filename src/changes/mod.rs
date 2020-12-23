@@ -6,8 +6,8 @@ use smalllist::SmallList;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Change<T> {
-    pub redo: T,
-    pub undo: T,
+    redo: T,
+    undo: T,
 }
 
 impl<T> Change<T> {
@@ -65,7 +65,7 @@ impl<T> Changes<T> {
 
     pub fn only(item: Change<T>) -> Self {
         Self {
-            inner: SmallList::once(item),
+            inner: SmallList::only(item),
         }
     }
 
