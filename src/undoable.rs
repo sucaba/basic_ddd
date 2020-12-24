@@ -129,6 +129,13 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
     {
         self.changes_mut().iter_last_redos(count)
     }
+
+    pub fn iter_undos(&mut self) -> impl '_ + DoubleEndedIterator<Item = &Change<T::EventType>>
+    where
+        T::EventType: Clone,
+    {
+        self.changes_mut().iter_undos()
+    }
 }
 
 impl<'a, T: Undoable> Drop for Atomic<'a, T> {

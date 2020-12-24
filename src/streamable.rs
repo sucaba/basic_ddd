@@ -23,7 +23,8 @@ where
     where
         S: Stream<Self::EventType>,
     {
-        let mut strategy = UndoRedoStreamingStrategy::new(self);
+        //let mut strategy = UndoRedoStreamingStrategy::new(self);
+        let mut strategy = CloneRedoStreamingStrategy::new(self);
         // TODO: Pass event references and not values
         stream.stream(strategy.events().into_iter().cloned());
     }
@@ -41,14 +42,14 @@ impl<'a, U: Undoable> UndoRedoStreamingStrategy<'a, U>
 where
     U::EventType: Clone,
 {
-    fn new(undoable: &'a mut U) -> Self {
+    pub fn new(undoable: &'a mut U) -> Self {
         let count = undoable.changes_mut().history_len();
         let mut um = undoable.undo_manager();
         um.undo_all();
         Self { um, count }
     }
 
-    fn events(&mut self) -> impl IntoIterator<Item = &U::EventType> {
+    pub fn events(&mut self) -> impl IntoIterator<Item = &U::EventType> {
         self.um.iter_last_redos(self.count).rev().map(|c| c.undo())
     }
 }
@@ -59,6 +60,28 @@ where
 {
     fn drop(&mut self) {
         self.um.redo_n(self.count);
+    }
+}
+
+pub struct CloneRedoStreamingStrategy<'a, U: Undoable>
+where
+    U::EventType: Clone,
+{
+    um: UndoManager<'a, U>,
+}
+
+impl<'a, U: Undoable> CloneRedoStreamingStrategy<'a, U>
+where
+    U::EventType: Clone,
+{
+    pub fn new(undoable: &'a mut U) -> Self {
+        Self {
+            um: undoable.undo_manager(),
+        }
+    }
+
+    pub fn events(&mut self) -> impl IntoIterator<Item = &U::EventType> {
+        self.um.iter_undos().map(|c| c.redo())
     }
 }
 

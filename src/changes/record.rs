@@ -73,6 +73,10 @@ impl<T> Record<T> {
         let len = self.redos.len();
         self.redos[(len - count)..len].iter()
     }
+
+    pub fn iter_undos(&mut self) -> impl '_ + DoubleEndedIterator<Item = &Change<T>> {
+        self.undos.iter()
+    }
 }
 
 impl<T> Default for Record<T> {
