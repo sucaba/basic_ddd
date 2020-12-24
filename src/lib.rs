@@ -6,6 +6,7 @@ mod primary;
 pub mod result;
 mod storage;
 mod streamable;
+mod streaming;
 mod test_utils;
 mod undoable;
 
@@ -17,6 +18,7 @@ pub use primary::*;
 pub use result::*;
 pub use storage::*;
 pub use streamable::*;
+pub use streaming::*;
 pub use undoable::*;
 
 pub trait ManyReferences<OtherType: Identifiable> {
