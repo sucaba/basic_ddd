@@ -22,23 +22,8 @@ impl<T> Record<T> {
         self.undos.len()
     }
 
-    pub fn reverse(&mut self) {
-        self.undos.reverse();
-    }
-
-    pub fn iter(&self) -> slice::Iter<'_, FullChange<T>> {
-        self.undos.iter()
-    }
-
     pub fn take_after(&mut self, pos: usize) -> impl Iterator<Item = FullChange<T>> + '_ {
         self.undos.drain(pos..)
-    }
-
-    pub fn drain<R>(&mut self, range: R) -> impl Iterator<Item = FullChange<T>> + '_
-    where
-        R: ops::RangeBounds<usize>,
-    {
-        self.undos.drain(range)
     }
 
     pub fn make_applied<F>(entry: T, make_undo: F) -> FullChange<T>
