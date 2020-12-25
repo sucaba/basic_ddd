@@ -3,8 +3,8 @@
 use std::rc::Rc;
 
 use basic_ddd::{
-    Changable, Error, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection, Primary,
-    Record, Result, Save, Undoable,
+    Changable, Error, FullChange, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection,
+    Primary, Record, Result, Save, Undoable,
 };
 
 fn main() -> Result<()> {
@@ -47,7 +47,7 @@ struct Order {
     primary: Primary<OrderPrimary>,
     items: OwnedCollection<Rc<OrderItem>>,
 
-    changes: Record<OrderEvent>,
+    changes: Record<FullChange<OrderEvent>>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -144,7 +144,7 @@ impl Changable for Order {
 }
 
 impl Undoable for Order {
-    fn changes_mut(&mut self) -> &mut Record<Self::EventType> {
+    fn changes_mut(&mut self) -> &mut Record<FullChange<Self::EventType>> {
         &mut self.changes
     }
 }

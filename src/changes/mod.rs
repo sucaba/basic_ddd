@@ -99,7 +99,7 @@ impl<T> FullChanges<T> {
     }
 }
 
-impl<T> From<FullChanges<T>> for Record<T> {
+impl<T> From<FullChanges<T>> for Record<FullChange<T>> {
     fn from(src: FullChanges<T>) -> Self {
         src.into_iter().collect()
     }

@@ -3,7 +3,7 @@ use crate::changes::{FullChange, FullChanges, Record};
 use std::mem;
 
 pub trait Undoable: Changable + Sized {
-    fn changes_mut(&mut self) -> &mut Record<Self::EventType>;
+    fn changes_mut(&mut self) -> &mut Record<FullChange<Self::EventType>>;
 
     fn begin_changes(&mut self) -> Atomic<'_, Self> {
         let check_point = self.changes_mut().history_len();
@@ -70,7 +70,7 @@ pub struct UndoManager<'a, T: Undoable> {
 }
 
 impl<'a, T: Undoable> UndoManager<'a, T> {
-    fn changes_mut(&mut self) -> &mut Record<T::EventType> {
+    fn changes_mut(&mut self) -> &mut Record<FullChange<T::EventType>> {
         self.subj.changes_mut()
     }
 
@@ -79,7 +79,7 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
         T::EventType: Clone,
     {
         if let Some(c) = self.changes_mut().pop_undo() {
-            let change = Record::make_applied(c.take_undo(), |e| self.subj.apply(e));
+            let change = self.subj.applied(c.take_undo());
             self.changes_mut().push_redo(change);
             true
         } else {
@@ -92,7 +92,7 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
         T::EventType: Clone,
     {
         if let Some(c) = self.changes_mut().pop_redo() {
-            let change = Record::make_applied(c.take_undo(), |e| self.subj.apply(e));
+            let change = self.subj.applied(c.take_undo());
             self.changes_mut().push_undo(change);
             true
         } else {
@@ -155,6 +155,7 @@ impl<'a, T: Undoable> Drop for Atomic<'a, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::changes::FullChange;
     use crate::streamable::Streamable;
     use pretty_assertions::assert_eq;
     use TestEvent::*;
@@ -162,7 +163,7 @@ mod tests {
     #[derive(Debug, Eq, PartialEq)]
     struct TestEntry {
         state: TestEvent,
-        changes: Record<TestEvent>,
+        changes: Record<FullChange<TestEvent>>,
     }
 
     #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -189,7 +190,7 @@ mod tests {
         fn start(&mut self) -> Result<(), String> {
             self.validate_not_started()?;
 
-            let change = Record::make_applied(Started, |e| self.apply(e));
+            let change = self.applied(Started);
             self.changes.push_undo(change);
             Ok(())
         }
@@ -218,7 +219,7 @@ mod tests {
     }
 
     impl Undoable for TestEntry {
-        fn changes_mut(&mut self) -> &mut Record<Self::EventType> {
+        fn changes_mut(&mut self) -> &mut Record<FullChange<Self::EventType>> {
             &mut self.changes
         }
     }
