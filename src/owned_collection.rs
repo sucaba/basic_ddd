@@ -208,24 +208,6 @@ where
     }
 }
 
-/// Extend trait cannot be implemented because \
-/// we cannot return Changes out of extend method:
-///
-/// impl<T> Extend<T> for OwnedCollection<T>
-/// where
-///     T: GetId + Clone,
-///     T::IdentifiableType: Owned,
-///     Id<T::IdentifiableType>: hash::Hash + Clone,
-/// {
-///     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) -> Changes<<Self as Streamable>::EventType> {
-///         iter.into_iter()
-///             .map(|item| self.update_or_add(item))
-///             .flatten()
-///             .collect()
-///     }
-/// }
-///
-
 impl<T> Changable for OwnedCollection<T>
 where
     T: GetId + Clone,
