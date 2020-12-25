@@ -5,21 +5,12 @@ pub use record::*;
 use smalllist::SmallList;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Change<T> {
+pub struct FullChange<T> {
     redo: T,
     undo: T,
 }
 
-impl<T> Change<T> {
-    pub fn applied<F>(redo: T, make_undo: F) -> Self
-    where
-        F: FnOnce(T) -> T,
-        T: Clone,
-    {
-        let undo = make_undo(redo.clone());
-        Change::new(redo, undo)
-    }
-
+impl<T> FullChange<T> {
     pub fn new(redo: T, undo: T) -> Self {
         Self { undo, redo }
     }
@@ -40,11 +31,11 @@ impl<T> Change<T> {
         &self.undo
     }
 
-    pub fn bubble_up<O, F>(self, f: F) -> Change<O>
+    pub fn bubble_up<O, F>(self, f: F) -> FullChange<O>
     where
         F: Fn(T) -> O,
     {
-        Change {
+        FullChange {
             redo: f(self.redo),
             undo: f(self.undo),
         }
@@ -52,18 +43,18 @@ impl<T> Change<T> {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Changes<T> {
-    inner: SmallList<Change<T>>,
+pub struct FullChanges<T> {
+    inner: SmallList<FullChange<T>>,
 }
 
-impl<T> Changes<T> {
+impl<T> FullChanges<T> {
     pub fn new() -> Self {
-        Changes {
+        FullChanges {
             inner: SmallList::new(),
         }
     }
 
-    pub fn only(item: Change<T>) -> Self {
+    pub fn only(item: FullChange<T>) -> Self {
         Self {
             inner: SmallList::only(item),
         }
@@ -73,7 +64,7 @@ impl<T> Changes<T> {
         self.inner.len()
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, Change<T>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, FullChange<T>> {
         self.inner.iter()
     }
 
@@ -87,36 +78,36 @@ impl<T> Changes<T> {
         dest.append(self)
     }
 
-    pub fn map<F, O>(self, f: F) -> Changes<O>
+    pub fn map<F, O>(self, f: F) -> FullChanges<O>
     where
-        F: Fn(Change<T>) -> Change<O>,
+        F: Fn(FullChange<T>) -> FullChange<O>,
     {
-        self.into_iter().map(f).collect::<Changes<O>>()
+        self.into_iter().map(f).collect::<FullChanges<O>>()
     }
 
-    pub fn bubble_up<O, F>(self, f: F) -> Changes<O>
+    pub fn bubble_up<O, F>(self, f: F) -> FullChanges<O>
     where
         F: Clone + Fn(T) -> O,
     {
         self.into_iter()
             .map(move |ch| ch.bubble_up(f.clone()))
-            .collect::<Changes<O>>()
+            .collect::<FullChanges<O>>()
     }
 
-    pub fn append<I: IntoIterator<Item = Change<T>>>(&mut self, iter: I) {
+    pub fn append<I: IntoIterator<Item = FullChange<T>>>(&mut self, iter: I) {
         self.inner.extend(iter)
     }
 }
 
-impl<T> From<Changes<T>> for Record<T> {
-    fn from(src: Changes<T>) -> Self {
+impl<T> From<FullChanges<T>> for Record<T> {
+    fn from(src: FullChanges<T>) -> Self {
         src.into_iter().collect()
     }
 }
 
-impl<T, I> std::ops::Index<I> for Changes<T>
+impl<T, I> std::ops::Index<I> for FullChanges<T>
 where
-    I: std::slice::SliceIndex<[Change<T>]>,
+    I: std::slice::SliceIndex<[FullChange<T>]>,
 {
     type Output = I::Output;
 
@@ -125,23 +116,23 @@ where
     }
 }
 
-impl<T> Into<Vec<Change<T>>> for Changes<T> {
-    fn into(self) -> Vec<Change<T>> {
+impl<T> Into<Vec<FullChange<T>>> for FullChanges<T> {
+    fn into(self) -> Vec<FullChange<T>> {
         self.inner.into_iter().collect()
     }
 }
 
-impl<T> std::iter::FromIterator<Change<T>> for Changes<T> {
-    fn from_iter<I: IntoIterator<Item = Change<T>>>(iter: I) -> Self {
+impl<T> std::iter::FromIterator<FullChange<T>> for FullChanges<T> {
+    fn from_iter<I: IntoIterator<Item = FullChange<T>>>(iter: I) -> Self {
         Self {
             inner: iter.into_iter().collect(),
         }
     }
 }
 
-impl<T> std::iter::IntoIterator for Changes<T> {
-    type Item = Change<T>;
-    type IntoIter = <Vec<Change<T>> as std::iter::IntoIterator>::IntoIter;
+impl<T> std::iter::IntoIterator for FullChanges<T> {
+    type Item = FullChange<T>;
+    type IntoIter = <Vec<FullChange<T>> as std::iter::IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()

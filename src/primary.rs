@@ -1,6 +1,6 @@
 use super::changable::Changable;
 use super::identifiable::*;
-use crate::changes::Changes;
+use crate::changes::FullChanges;
 use crate::result::NotFound;
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
@@ -106,7 +106,7 @@ where
     PrimaryEvent<T>: Sized,
     Id<<T as GetId>::IdentifiableType>: Clone,
 {
-    pub fn new(row: T) -> (Self, Changes<PrimaryEvent<T>>)
+    pub fn new(row: T) -> (Self, FullChanges<PrimaryEvent<T>>)
     where
         T: Clone,
     {
@@ -124,14 +124,14 @@ where
         self.inner.as_ref()
     }
 
-    pub fn create(&mut self, row: T) -> Changes<PrimaryEvent<T>>
+    pub fn create(&mut self, row: T) -> FullChanges<PrimaryEvent<T>>
     where
         T: Clone,
     {
         self.applied(Created(row))
     }
 
-    pub fn set(&mut self, row: T) -> StdResult<Changes<PrimaryEvent<T>>, NotFound<T>>
+    pub fn set(&mut self, row: T) -> StdResult<FullChanges<PrimaryEvent<T>>, NotFound<T>>
     where
         T: Clone,
     {
@@ -142,7 +142,7 @@ where
         }
     }
 
-    pub fn update<F>(&mut self, f: F) -> StdResult<Changes<PrimaryEvent<T>>, NotFound<()>>
+    pub fn update<F>(&mut self, f: F) -> StdResult<FullChanges<PrimaryEvent<T>>, NotFound<()>>
     where
         F: FnOnce(&mut T),
         T: Clone,
@@ -156,7 +156,7 @@ where
         }
     }
 
-    pub fn delete(&mut self) -> StdResult<Changes<PrimaryEvent<T>>, NotFound<()>>
+    pub fn delete(&mut self) -> StdResult<FullChanges<PrimaryEvent<T>>, NotFound<()>>
     where
         T: Clone,
     {
@@ -198,7 +198,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::changes::Change;
+    use crate::changes::FullChange;
     use pretty_assertions::assert_eq;
 
     #[derive(Debug, Clone, Eq, PartialEq)]
@@ -241,7 +241,7 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![Change::new(
+            vec![FullChange::new(
                 Updated(MyEntity {
                     id: ID,
                     name: "bar".into()
@@ -263,7 +263,7 @@ mod tests {
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
             changes,
-            vec![Change::new(
+            vec![FullChange::new(
                 Updated(MyEntity {
                     id: ID,
                     name: "bar".into()
@@ -285,7 +285,7 @@ mod tests {
         assert_eq!(sut.try_get(), None);
         assert_eq!(
             changes,
-            vec![Change::new(
+            vec![FullChange::new(
                 Deleted(
                     (MyEntity {
                         id: ID,

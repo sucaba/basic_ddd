@@ -1,5 +1,5 @@
 use crate::changable::Changable;
-use crate::changes::{Change, Changes, Record};
+use crate::changes::{FullChange, FullChanges, Record};
 use std::mem;
 
 pub trait Undoable: Changable + Sized {
@@ -37,7 +37,7 @@ impl<'a, T: Undoable> Atomic<'a, T> {
 
     pub fn mutate<F, E>(&mut self, f: F) -> Result<(), E>
     where
-        F: FnOnce(&mut T) -> Result<Changes<T::EventType>, E>,
+        F: FnOnce(&mut T) -> Result<FullChanges<T::EventType>, E>,
     {
         let changes = f(self.subj)?;
         self.subj.changes_mut().extend(changes);
@@ -50,7 +50,7 @@ impl<'a, T: Undoable> Atomic<'a, T> {
         bubble_up: B,
     ) -> Result<(), E>
     where
-        M: FnOnce(&mut T) -> Result<Changes<InnerEvent>, E>,
+        M: FnOnce(&mut T) -> Result<FullChanges<InnerEvent>, E>,
         B: Clone + Fn(InnerEvent) -> T::EventType,
     {
         let inner_changes = change_inner(self.subj)?;
@@ -123,14 +123,14 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
     pub fn iter_last_redos(
         &mut self,
         count: usize,
-    ) -> impl '_ + DoubleEndedIterator<Item = &Change<T::EventType>>
+    ) -> impl '_ + DoubleEndedIterator<Item = &FullChange<T::EventType>>
     where
         T::EventType: Clone,
     {
         self.changes_mut().iter_last_redos(count)
     }
 
-    pub fn iter_undos(&mut self) -> impl '_ + DoubleEndedIterator<Item = &Change<T::EventType>>
+    pub fn iter_undos(&mut self) -> impl '_ + DoubleEndedIterator<Item = &FullChange<T::EventType>>
     where
         T::EventType: Clone,
     {
