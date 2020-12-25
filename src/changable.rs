@@ -1,15 +1,14 @@
 use crate::change_abs::AppliedChange;
-use crate::changes::{FullChange, FullChanges};
 
 pub trait Changable: Sized {
     type EventType;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType;
 
-    fn applied(&mut self, e: Self::EventType) -> FullChanges<Self::EventType>
+    fn applied<C>(&mut self, e: Self::EventType) -> C
     where
-        Self::EventType: Clone,
+        C: AppliedChange<Self::EventType>,
     {
-        FullChanges::only(FullChange::applied(e, |e| self.apply(e)))
+        C::from_application(e, |e| self.apply(e))
     }
 }

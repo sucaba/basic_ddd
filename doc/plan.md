@@ -1,10 +1,6 @@
 # Plan
 
-0. Abstract away Change
-0. Problem: `Changes` is used in `Changable` trait. Fix by making apply
-   generic with `TChange` parameter
 0. Abstract away Record
-0. Abstract away Changes
 1. `Change` abstraction should satisfy both undo-only and redo+undo
    cases.
 0. Change abstraction should be driven from Record 
