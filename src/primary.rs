@@ -1,6 +1,6 @@
 use super::changable::Changable;
+use super::change_abs::AppliedChange;
 use super::identifiable::*;
-use crate::changes::FullChanges;
 use crate::result::NotFound;
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
@@ -106,8 +106,9 @@ where
     PrimaryEvent<T>: Sized,
     Id<<T as GetId>::IdentifiableType>: Clone,
 {
-    pub fn new(row: T) -> (Self, FullChanges<PrimaryEvent<T>>)
+    pub fn new<C>(row: T) -> (Self, C)
     where
+        C: AppliedChange<PrimaryEvent<T>>,
         T: Clone,
     {
         let mut result = Self { inner: None };
@@ -124,15 +125,17 @@ where
         self.inner.as_ref()
     }
 
-    pub fn create(&mut self, row: T) -> FullChanges<PrimaryEvent<T>>
+    pub fn create<C>(&mut self, row: T) -> C
     where
+        C: AppliedChange<PrimaryEvent<T>>,
         T: Clone,
     {
         self.applied(Created(row))
     }
 
-    pub fn set(&mut self, row: T) -> StdResult<FullChanges<PrimaryEvent<T>>, NotFound<T>>
+    pub fn set<C>(&mut self, row: T) -> StdResult<C, NotFound<T>>
     where
+        C: AppliedChange<PrimaryEvent<T>>,
         T: Clone,
     {
         if let Some(_) = &self.inner {
@@ -142,8 +145,9 @@ where
         }
     }
 
-    pub fn update<F>(&mut self, f: F) -> StdResult<FullChanges<PrimaryEvent<T>>, NotFound<()>>
+    pub fn update<F, C>(&mut self, f: F) -> StdResult<C, NotFound<()>>
     where
+        C: AppliedChange<PrimaryEvent<T>>,
         F: FnOnce(&mut T),
         T: Clone,
     {
@@ -156,8 +160,9 @@ where
         }
     }
 
-    pub fn delete(&mut self) -> StdResult<FullChanges<PrimaryEvent<T>>, NotFound<()>>
+    pub fn delete<C>(&mut self) -> StdResult<C, NotFound<()>>
     where
+        C: AppliedChange<PrimaryEvent<T>>,
         T: Clone,
     {
         if let Some(existing) = &self.inner {
@@ -199,6 +204,7 @@ where
 mod tests {
     use super::*;
     use crate::changes::FullChange;
+    use crate::changes::FullChanges;
     use pretty_assertions::assert_eq;
 
     #[derive(Debug, Clone, Eq, PartialEq)]
@@ -218,7 +224,7 @@ mod tests {
     const ID: i32 = 42;
 
     fn setup() -> Primary<MyEntity> {
-        let (result, _changes) = Primary::new(MyEntity {
+        let (result, _changes): (_, FullChanges<_>) = Primary::new(MyEntity {
             id: ID,
             name: "foo".into(),
         });
@@ -231,7 +237,7 @@ mod tests {
         let mut sut = setup();
 
         let changes: Vec<_> = sut
-            .set(MyEntity {
+            .set::<FullChanges<_>>(MyEntity {
                 id: ID,
                 name: "bar".into(),
             })
@@ -258,7 +264,10 @@ mod tests {
     fn should_update() {
         let mut sut = setup();
 
-        let changes: Vec<_> = sut.update(|x| x.name = "bar".into()).unwrap().into();
+        let changes: Vec<_> = sut
+            .update::<_, FullChanges<_>>(|x| x.name = "bar".into())
+            .unwrap()
+            .into();
 
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
@@ -280,7 +289,7 @@ mod tests {
     fn should_delete() {
         let mut sut = setup();
 
-        let changes: Vec<_> = sut.delete().unwrap().into();
+        let changes: Vec<_> = sut.delete::<FullChanges<_>>().unwrap().into();
 
         assert_eq!(sut.try_get(), None);
         assert_eq!(

@@ -3,8 +3,8 @@
 use std::rc::Rc;
 
 use basic_ddd::{
-    Changable, Error, FullChange, Id, Identifiable, InMemoryStorage, Load, Owned, OwnedCollection,
-    Primary, Record, Result, Save, Undoable,
+    Changable, Error, FullChange, FullChanges, Id, Identifiable, InMemoryStorage, Load, Owned,
+    OwnedCollection, Primary, Record, Result, Save, Undoable,
 };
 
 fn main() -> Result<()> {
@@ -74,7 +74,7 @@ impl Order {
     fn new(mut primary: OrderPrimary) -> Self {
         primary.item_count = 0;
 
-        let (primary, changes) = Primary::new(primary);
+        let (primary, changes): (_, FullChanges<_>) = Primary::new(primary);
         let top_changes = changes.bubble_up(OrderEvent::Primary);
         Self {
             primary,

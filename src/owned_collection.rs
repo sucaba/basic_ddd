@@ -1,7 +1,7 @@
 // TODO: Remove std::hash references
 use super::changable::*;
 use super::identifiable::*;
-use crate::changes::FullChanges;
+use crate::change_abs::AppliedChange;
 use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
@@ -259,8 +259,9 @@ where
         self.inner.len()
     }
 
-    pub fn update_or_add(&mut self, item: T) -> FullChanges<OwnedEvent<T>>
+    pub fn update_or_add<C>(&mut self, item: T) -> C
     where
+        C: AppliedChange<OwnedEvent<T>>,
         T: fmt::Debug,
     {
         self.update(item)
@@ -271,7 +272,10 @@ where
     /**
      * Updates existing item or returns item back as a Result::Err
      */
-    pub fn update(&mut self, item: T) -> StdResult<FullChanges<OwnedEvent<T>>, NotFound<T>> {
+    pub fn update<C>(&mut self, item: T) -> StdResult<C, NotFound<T>>
+    where
+        C: AppliedChange<OwnedEvent<T>>,
+    {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
             Ok(self.applied(Updated(pos, item)))
         } else {
@@ -283,7 +287,10 @@ where
      * Inserts a new item and returns `Ok(())` if item with the same id does not exist.
      * Returns `Err(item)` if item with the same already exists.
      */
-    pub fn add_new(&mut self, item: T) -> StdResult<FullChanges<OwnedEvent<T>>, AlreadyExists<T>> {
+    pub fn add_new<C>(&mut self, item: T) -> StdResult<C, AlreadyExists<T>>
+    where
+        C: AppliedChange<OwnedEvent<T>>,
+    {
         let id = item.get_id();
         if let None = self.position_by_id(&id) {
             Ok(self.applied(Created(item)))
@@ -296,10 +303,10 @@ where
         self.inner.iter().position(|x| &x.get_id() == id)
     }
 
-    pub fn remove(
-        &mut self,
-        item: &T,
-    ) -> StdResult<FullChanges<OwnedEvent<T>>, NotFound<Id<T::IdentifiableType>>> {
+    pub fn remove<C>(&mut self, item: &T) -> StdResult<C, NotFound<Id<T::IdentifiableType>>>
+    where
+        C: AppliedChange<OwnedEvent<T>>,
+    {
         let id = item.get_id();
         match self.remove_by_id(&id) {
             Err(_) => Err(NotFound(id)),
@@ -307,10 +314,13 @@ where
         }
     }
 
-    pub fn remove_by_id<'a>(
+    pub fn remove_by_id<'a, C>(
         &mut self,
         id: &'a Id<T::IdentifiableType>,
-    ) -> StdResult<FullChanges<OwnedEvent<T>>, NotFound<&'a Id<T::IdentifiableType>>> {
+    ) -> StdResult<C, NotFound<&'a Id<T::IdentifiableType>>>
+    where
+        C: AppliedChange<OwnedEvent<T>>,
+    {
         if let Some(_) = self.position_by_id(id) {
             Ok(self.applied(Deleted(id.clone())))
         } else {
@@ -323,7 +333,7 @@ where
 mod owned_collection_tests {
 
     use super::*;
-    use crate::changes::FullChange;
+    use crate::changes::{FullChange, FullChanges};
     use pretty_assertions::assert_eq;
     use std::cmp::{Eq, PartialEq};
     use std::rc::Rc;
@@ -398,8 +408,8 @@ mod owned_collection_tests {
 
     fn setup() -> Sut {
         let mut sut = OwnedCollection::new();
-        sut.update_or_add(colored(ANY_NOT_USED_ENTRY_ID, None));
-        sut.update_or_add(colored(EXISTING_ID, None));
+        sut.update_or_add::<FullChange<_>>(colored(ANY_NOT_USED_ENTRY_ID, None));
+        sut.update_or_add::<FullChange<_>>(colored(EXISTING_ID, None));
         sut
     }
 
@@ -409,8 +419,8 @@ mod owned_collection_tests {
 
         let mut changes = FullChanges::<OwnedEvent<Rc<TestEntry>>>::new();
 
-        changes.append(sut.update_or_add(colored(1, Red)));
-        changes.append(sut.update_or_add(colored(2, Red)));
+        changes.append::<FullChanges<_>>(sut.update_or_add(colored(1, Red)));
+        changes.append::<FullChanges<_>>(sut.update_or_add(colored(2, Red)));
 
         assert_eq!(
             sorted(changes.into()),
@@ -425,7 +435,9 @@ mod owned_collection_tests {
     fn update_event_is_streamed() {
         let mut sut = setup();
 
-        let changes: Vec<_> = sut.update_or_add(colored(EXISTING_ID, Red)).into();
+        let changes: Vec<_> = sut
+            .update_or_add::<FullChanges<_>>(colored(EXISTING_ID, Red))
+            .into();
 
         assert_eq!(
             changes,
@@ -441,7 +453,7 @@ mod owned_collection_tests {
         let mut sut = setup();
 
         let id = colored(EXISTING_ID, Red).get_id();
-        let removed = sut.remove_by_id(&id);
+        let removed: Result<FullChanges<_>, _> = sut.remove_by_id(&id);
 
         assert!(matches!(removed, Ok(_)));
 
