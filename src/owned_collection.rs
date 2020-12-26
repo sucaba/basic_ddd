@@ -2,10 +2,12 @@
 use super::changable::*;
 use super::identifiable::*;
 use crate::change_abs::AppliedChange;
+use crate::changes::FullChanges;
 use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
 use std::hash;
+use std::marker;
 use std::mem;
 use std::ops;
 use std::result::Result as StdResult;
@@ -117,23 +119,24 @@ where
     }
 }
 
-pub struct OwnedCollection<T>
+pub struct OwnedCollection<T, C = FullChanges<OwnedEvent<T>>>
 where
     T: GetId,
     T::IdentifiableType: Owned,
 {
     inner: Vec<T>,
     complete: bool,
+    marker: marker::PhantomData<C>,
 }
 
-impl<T> Eq for OwnedCollection<T>
+impl<T, C> Eq for OwnedCollection<T, C>
 where
     T: GetId + Eq,
     T::IdentifiableType: Owned,
 {
 }
 
-impl<T> PartialEq for OwnedCollection<T>
+impl<T, C> PartialEq for OwnedCollection<T, C>
 where
     T: GetId + PartialEq,
     T::IdentifiableType: Owned,
@@ -143,7 +146,7 @@ where
     }
 }
 
-impl<T: GetId + fmt::Debug> fmt::Debug for OwnedCollection<T>
+impl<T, C> fmt::Debug for OwnedCollection<T, C>
 where
     T: GetId + fmt::Debug,
     T::IdentifiableType: Owned,
@@ -155,7 +158,7 @@ where
     }
 }
 
-impl<T, I> ops::Index<I> for OwnedCollection<T>
+impl<T, C, I> ops::Index<I> for OwnedCollection<T, C>
 where
     I: slice::SliceIndex<[T]>,
     T: GetId + fmt::Debug,
@@ -169,7 +172,7 @@ where
     }
 }
 
-impl<'a, T> IntoIterator for &'a OwnedCollection<T>
+impl<'a, T, C> IntoIterator for &'a OwnedCollection<T, C>
 where
     T: GetId,
     T::IdentifiableType: Owned,
@@ -182,19 +185,20 @@ where
     }
 }
 
-impl<T> Default for OwnedCollection<T>
+impl<T, C> Default for OwnedCollection<T, C>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
     Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
+    C: AppliedChange<OwnedEvent<T>>,
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T> Clone for OwnedCollection<T>
+impl<T, C> Clone for OwnedCollection<T, C>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
@@ -204,11 +208,12 @@ where
         Self {
             inner: self.inner.clone(),
             complete: self.complete,
+            marker: self.marker,
         }
     }
 }
 
-impl<T> Changable for OwnedCollection<T>
+impl<T, C> Changable for OwnedCollection<T, C>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
@@ -237,20 +242,32 @@ where
     }
 }
 
-impl<T> OwnedCollection<T>
+impl<T, C> OwnedCollection<T, C>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: hash::Hash + Clone,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
 {
     pub fn new() -> Self {
         Self {
             inner: Vec::new(),
             complete: true,
+            marker: marker::PhantomData,
         }
     }
 
+    fn position_by_id(&self, id: &Id<T::IdentifiableType>) -> Option<usize> {
+        self.inner.iter().position(|x| &x.get_id() == id)
+    }
+}
+
+impl<T, C> OwnedCollection<T, C>
+where
+    C: AppliedChange<OwnedEvent<T>>,
+    T: GetId + Clone,
+    T::IdentifiableType: Owned,
+    Id<T::IdentifiableType>: hash::Hash + Clone,
+    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
+{
     pub fn iter(&self) -> slice::Iter<'_, T> {
         self.inner.iter()
     }
@@ -259,9 +276,8 @@ where
         self.inner.len()
     }
 
-    pub fn update_or_add<C>(&mut self, item: T) -> C
+    pub fn update_or_add(&mut self, item: T) -> C
     where
-        C: AppliedChange<OwnedEvent<T>>,
         T: fmt::Debug,
     {
         self.update(item)
@@ -272,10 +288,7 @@ where
     /**
      * Updates existing item or returns item back as a Result::Err
      */
-    pub fn update<C>(&mut self, item: T) -> StdResult<C, NotFound<T>>
-    where
-        C: AppliedChange<OwnedEvent<T>>,
-    {
+    pub fn update(&mut self, item: T) -> StdResult<C, NotFound<T>> {
         if let Some(pos) = self.position_by_id(&item.get_id()) {
             Ok(self.applied(Updated(pos, item)))
         } else {
@@ -287,10 +300,7 @@ where
      * Inserts a new item and returns `Ok(())` if item with the same id does not exist.
      * Returns `Err(item)` if item with the same already exists.
      */
-    pub fn add_new<C>(&mut self, item: T) -> StdResult<C, AlreadyExists<T>>
-    where
-        C: AppliedChange<OwnedEvent<T>>,
-    {
+    pub fn add_new(&mut self, item: T) -> StdResult<C, AlreadyExists<T>> {
         let id = item.get_id();
         if let None = self.position_by_id(&id) {
             Ok(self.applied(Created(item)))
@@ -299,14 +309,7 @@ where
         }
     }
 
-    fn position_by_id(&self, id: &Id<T::IdentifiableType>) -> Option<usize> {
-        self.inner.iter().position(|x| &x.get_id() == id)
-    }
-
-    pub fn remove<C>(&mut self, item: &T) -> StdResult<C, NotFound<Id<T::IdentifiableType>>>
-    where
-        C: AppliedChange<OwnedEvent<T>>,
-    {
+    pub fn remove(&mut self, item: &T) -> StdResult<C, NotFound<Id<T::IdentifiableType>>> {
         let id = item.get_id();
         match self.remove_by_id(&id) {
             Err(_) => Err(NotFound(id)),
@@ -314,13 +317,10 @@ where
         }
     }
 
-    pub fn remove_by_id<'a, C>(
+    pub fn remove_by_id<'a>(
         &mut self,
         id: &'a Id<T::IdentifiableType>,
-    ) -> StdResult<C, NotFound<&'a Id<T::IdentifiableType>>>
-    where
-        C: AppliedChange<OwnedEvent<T>>,
-    {
+    ) -> StdResult<C, NotFound<&'a Id<T::IdentifiableType>>> {
         if let Some(_) = self.position_by_id(id) {
             Ok(self.applied(Deleted(id.clone())))
         } else {
@@ -408,8 +408,8 @@ mod owned_collection_tests {
 
     fn setup() -> Sut {
         let mut sut = OwnedCollection::new();
-        sut.update_or_add::<FullChange<_>>(colored(ANY_NOT_USED_ENTRY_ID, None));
-        sut.update_or_add::<FullChange<_>>(colored(EXISTING_ID, None));
+        sut.update_or_add(colored(ANY_NOT_USED_ENTRY_ID, None));
+        sut.update_or_add(colored(EXISTING_ID, None));
         sut
     }
 
@@ -419,8 +419,8 @@ mod owned_collection_tests {
 
         let mut changes = FullChanges::<OwnedEvent<Rc<TestEntry>>>::new();
 
-        changes.append::<FullChanges<_>>(sut.update_or_add(colored(1, Red)));
-        changes.append::<FullChanges<_>>(sut.update_or_add(colored(2, Red)));
+        changes.append(sut.update_or_add(colored(1, Red)));
+        changes.append(sut.update_or_add(colored(2, Red)));
 
         assert_eq!(
             sorted(changes.into()),
@@ -435,9 +435,7 @@ mod owned_collection_tests {
     fn update_event_is_streamed() {
         let mut sut = setup();
 
-        let changes: Vec<_> = sut
-            .update_or_add::<FullChanges<_>>(colored(EXISTING_ID, Red))
-            .into();
+        let changes: Vec<_> = sut.update_or_add(colored(EXISTING_ID, Red)).into();
 
         assert_eq!(
             changes,
@@ -453,7 +451,7 @@ mod owned_collection_tests {
         let mut sut = setup();
 
         let id = colored(EXISTING_ID, Red).get_id();
-        let removed: Result<FullChanges<_>, _> = sut.remove_by_id(&id);
+        let removed = sut.remove_by_id(&id);
 
         assert!(matches!(removed, Ok(_)));
 

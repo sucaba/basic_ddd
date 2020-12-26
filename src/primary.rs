@@ -1,9 +1,11 @@
-use super::changable::Changable;
-use super::change_abs::AppliedChange;
-use super::identifiable::*;
+use crate::changable::Changable;
+use crate::change_abs::AppliedChange;
+use crate::identifiable::*;
 use crate::result::NotFound;
+use crate::FullChanges;
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
+use std::marker;
 use std::result::Result as StdResult;
 use PrimaryEvent::*;
 
@@ -61,17 +63,21 @@ where
     }
 }
 
-pub struct Primary<T: GetId> {
+pub struct Primary<T: GetId, C = FullChanges<PrimaryEvent<T>>> {
     inner: Option<T>,
+    marker: marker::PhantomData<C>,
 }
 
-impl<T: GetId> Default for Primary<T> {
+impl<T: GetId, C> Default for Primary<T, C> {
     fn default() -> Self {
-        Self { inner: None }
+        Self {
+            inner: None,
+            marker: marker::PhantomData,
+        }
     }
 }
 
-impl<T> Clone for Primary<T>
+impl<T, C> Clone for Primary<T, C>
 where
     T: GetId + Clone,
     PrimaryEvent<T>: Clone,
@@ -79,19 +85,20 @@ where
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            marker: marker::PhantomData,
         }
     }
 }
 
-impl<T: GetId + Eq> Eq for Primary<T> {}
+impl<T: GetId + Eq, C> Eq for Primary<T, C> {}
 
-impl<T: GetId + PartialEq> PartialEq for Primary<T> {
+impl<T: GetId + PartialEq, C> PartialEq for Primary<T, C> {
     fn eq(&self, other: &Self) -> bool {
         self.inner.eq(&other.inner)
     }
 }
 
-impl<T> fmt::Debug for Primary<T>
+impl<T, C> fmt::Debug for Primary<T, C>
 where
     T: GetId + fmt::Debug,
     Vec<PrimaryEvent<T>>: fmt::Debug,
@@ -101,17 +108,20 @@ where
     }
 }
 
-impl<T: GetId> Primary<T>
+impl<T: GetId, C> Primary<T, C>
 where
+    C: AppliedChange<PrimaryEvent<T>>,
     PrimaryEvent<T>: Sized,
     Id<<T as GetId>::IdentifiableType>: Clone,
 {
-    pub fn new<C>(row: T) -> (Self, C)
+    pub fn new(row: T) -> (Self, C)
     where
-        C: AppliedChange<PrimaryEvent<T>>,
         T: Clone,
     {
-        let mut result = Self { inner: None };
+        let mut result = Self {
+            inner: None,
+            marker: marker::PhantomData,
+        };
 
         let changes = result.create(row);
         (result, changes)
@@ -125,17 +135,15 @@ where
         self.inner.as_ref()
     }
 
-    pub fn create<C>(&mut self, row: T) -> C
+    pub fn create(&mut self, row: T) -> C
     where
-        C: AppliedChange<PrimaryEvent<T>>,
         T: Clone,
     {
         self.applied(Created(row))
     }
 
-    pub fn set<C>(&mut self, row: T) -> StdResult<C, NotFound<T>>
+    pub fn set(&mut self, row: T) -> StdResult<C, NotFound<T>>
     where
-        C: AppliedChange<PrimaryEvent<T>>,
         T: Clone,
     {
         if let Some(_) = &self.inner {
@@ -145,9 +153,8 @@ where
         }
     }
 
-    pub fn update<F, C>(&mut self, f: F) -> StdResult<C, NotFound<()>>
+    pub fn update<F>(&mut self, f: F) -> StdResult<C, NotFound<()>>
     where
-        C: AppliedChange<PrimaryEvent<T>>,
         F: FnOnce(&mut T),
         T: Clone,
     {
@@ -160,9 +167,8 @@ where
         }
     }
 
-    pub fn delete<C>(&mut self) -> StdResult<C, NotFound<()>>
+    pub fn delete(&mut self) -> StdResult<C, NotFound<()>>
     where
-        C: AppliedChange<PrimaryEvent<T>>,
         T: Clone,
     {
         if let Some(existing) = &self.inner {
@@ -174,7 +180,7 @@ where
     }
 }
 
-impl<T> Changable for Primary<T>
+impl<T, C> Changable for Primary<T, C>
 where
     T: GetId + Clone,
     Id<T::IdentifiableType>: Clone,
@@ -237,7 +243,7 @@ mod tests {
         let mut sut = setup();
 
         let changes: Vec<_> = sut
-            .set::<FullChanges<_>>(MyEntity {
+            .set(MyEntity {
                 id: ID,
                 name: "bar".into(),
             })
@@ -264,10 +270,7 @@ mod tests {
     fn should_update() {
         let mut sut = setup();
 
-        let changes: Vec<_> = sut
-            .update::<_, FullChanges<_>>(|x| x.name = "bar".into())
-            .unwrap()
-            .into();
+        let changes: Vec<_> = sut.update(|x| x.name = "bar".into()).unwrap().into();
 
         assert_eq!(sut.get().name.as_str(), "bar");
         assert_eq!(
@@ -289,7 +292,7 @@ mod tests {
     fn should_delete() {
         let mut sut = setup();
 
-        let changes: Vec<_> = sut.delete::<FullChanges<_>>().unwrap().into();
+        let changes: Vec<_> = sut.delete().unwrap().into();
 
         assert_eq!(sut.try_get(), None);
         assert_eq!(
