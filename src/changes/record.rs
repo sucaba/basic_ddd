@@ -21,8 +21,16 @@ impl<T> Record<T> {
         self.undos.len()
     }
 
-    pub fn take_after(&mut self, pos: usize) -> impl Iterator<Item = T> + '_ {
-        self.undos.drain(pos..)
+    pub fn undos(&mut self) -> &[T] {
+        &self.undos
+    }
+
+    pub fn redos(&mut self) -> &[T] {
+        &self.redos
+    }
+
+    pub fn take_after(&mut self, pos: usize) -> Vec<T> {
+        self.undos.drain(pos..).collect()
     }
 
     pub fn push_undo(&mut self, entry: T) {
@@ -39,15 +47,6 @@ impl<T> Record<T> {
 
     pub fn pop_redo(&mut self) -> Option<T> {
         self.redos.pop()
-    }
-
-    pub fn iter_last_redos(&mut self, count: usize) -> impl '_ + DoubleEndedIterator<Item = &T> {
-        let len = self.redos.len();
-        self.redos[(len - count)..len].iter()
-    }
-
-    pub fn iter_undos(&mut self) -> impl '_ + DoubleEndedIterator<Item = &T> {
-        self.undos.iter()
     }
 }
 

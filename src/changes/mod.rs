@@ -68,23 +68,6 @@ impl<T> FullChanges<T> {
         self.inner.iter()
     }
 
-    pub fn take_after(&mut self, pos: usize) -> Self {
-        Self {
-            inner: self.inner.take_after(pos),
-        }
-    }
-
-    pub fn to(self, dest: &mut Self) {
-        dest.append(self)
-    }
-
-    pub fn map<F, O>(self, f: F) -> FullChanges<O>
-    where
-        F: Fn(FullChange<T>) -> FullChange<O>,
-    {
-        self.into_iter().map(f).collect::<FullChanges<O>>()
-    }
-
     pub fn bubble_up<O, F>(self, f: F) -> FullChanges<O>
     where
         F: Clone + Fn(T) -> O,

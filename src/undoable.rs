@@ -127,24 +127,21 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
     where
         T::EventType: Clone,
     {
-        self.changes_mut().iter_last_redos(count)
+        let len = self.changes_mut().redos().len();
+        self.changes_mut().redos()[(len - count)..len].iter()
     }
 
     pub fn iter_undos(&mut self) -> impl '_ + DoubleEndedIterator<Item = &FullChange<T::EventType>>
     where
         T::EventType: Clone,
     {
-        self.changes_mut().iter_undos()
+        self.changes_mut().undos().iter()
     }
 }
 
 impl<'a, T: Undoable> Drop for Atomic<'a, T> {
     fn drop(&mut self) {
-        let mut to_compensate: Vec<_> = self
-            .subj
-            .changes_mut()
-            .take_after(self.check_point)
-            .collect();
+        let mut to_compensate = self.subj.changes_mut().take_after(self.check_point);
         to_compensate.reverse();
         for c in to_compensate {
             self.subj.apply(c.take_undo());

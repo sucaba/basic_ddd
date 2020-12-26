@@ -15,12 +15,6 @@ impl<T> SmallList<T> {
         Self { inner: vec![item] }
     }
 
-    pub fn take_after(&mut self, pos: usize) -> Self {
-        Self {
-            inner: self.inner.drain(pos..).collect(),
-        }
-    }
-
     pub fn len(&self) -> usize {
         self.inner.len()
     }
