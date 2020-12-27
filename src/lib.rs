@@ -8,6 +8,7 @@ pub mod result;
 mod storage;
 mod streamable;
 mod streaming;
+mod streaming_strategies;
 mod test_utils;
 mod undoable;
 
@@ -20,6 +21,7 @@ pub use result::*;
 pub use storage::*;
 pub use streamable::*;
 pub use streaming::*;
+pub use streaming_strategies::*;
 pub use undoable::*;
 
 pub trait ManyReferences<OtherType: Identifiable> {

@@ -120,22 +120,21 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
         mem::take(self.changes_mut());
     }
 
-    pub fn iter_last_redos(
+    pub fn iter_future_history(
         &mut self,
         count: usize,
-    ) -> impl '_ + DoubleEndedIterator<Item = &FullChange<T::EventType>>
-    where
-        T::EventType: Clone,
-    {
+    ) -> impl '_ + DoubleEndedIterator<Item = &T::EventType> {
         let len = self.changes_mut().redos().len();
-        self.changes_mut().redos()[(len - count)..len].iter()
+        self.changes_mut().redos()[(len - count)..len]
+            .iter()
+            .map(|c| c.undo())
     }
 
-    pub fn iter_undos(&mut self) -> impl '_ + DoubleEndedIterator<Item = &FullChange<T::EventType>>
+    pub fn iter_history(&mut self) -> impl '_ + DoubleEndedIterator<Item = &T::EventType>
     where
         T::EventType: Clone,
     {
-        self.changes_mut().undos().iter()
+        self.changes_mut().undos().iter().map(|c| c.redo())
     }
 }
 
@@ -154,6 +153,8 @@ mod tests {
     use super::*;
     use crate::changes::FullChange;
     use crate::streamable::Streamable;
+    use crate::streaming::Stream;
+    use crate::streaming_strategies::CloneRedoStreamingStrategy;
     use pretty_assertions::assert_eq;
     use TestEvent::*;
 
@@ -218,6 +219,15 @@ mod tests {
     impl Undoable for TestEntry {
         fn changes_mut(&mut self) -> &mut Record<FullChange<Self::EventType>> {
             &mut self.changes
+        }
+    }
+
+    impl Streamable for TestEntry {
+        fn stream_to<S>(&mut self, stream: &mut S)
+        where
+            S: Stream<Self::EventType>,
+        {
+            CloneRedoStreamingStrategy::new(self).stream_to(stream)
         }
     }
 

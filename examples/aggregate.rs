@@ -3,8 +3,9 @@
 use std::rc::Rc;
 
 use basic_ddd::{
-    Changable, Error, FullChange, FullChanges, Id, Identifiable, InMemoryStorage, Load, Owned,
-    OwnedCollection, Primary, Record, Result, Save, Undoable,
+    Changable, CloneRedoStreamingStrategy, Error, FullChange, FullChanges, Id, Identifiable,
+    InMemoryStorage, Load, Owned, OwnedCollection, Primary, Record, Result, Save, Streamable,
+    Undoable,
 };
 
 fn main() -> Result<()> {
@@ -140,6 +141,16 @@ impl Changable for Order {
             OrderEvent::Primary(e) => OrderEvent::Primary(self.primary.apply(e)),
             OrderEvent::Item(id, e) => OrderEvent::Item(id, self.items.apply(e)),
         }
+    }
+}
+
+impl Streamable for Order {
+    fn stream_to<S>(&mut self, stream: &mut S)
+    where
+        S: basic_ddd::Stream<Self::EventType>,
+    {
+        let mut m = CloneRedoStreamingStrategy::new(self);
+        m.stream_to(stream)
     }
 }
 
