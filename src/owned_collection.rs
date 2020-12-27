@@ -1,6 +1,5 @@
-// TODO: Remove std::hash references
-use super::changable::*;
 use super::identifiable::*;
+use crate::changable::Changable;
 use crate::change_abs::AppliedChange;
 use crate::changes::FullChanges;
 use crate::result::{AlreadyExists, NotFound};
@@ -215,7 +214,7 @@ where
 
 impl<T, C> Changable for OwnedCollection<T, C>
 where
-    T: GetId + Clone,
+    T: GetId,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
     Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
@@ -244,7 +243,7 @@ where
 
 impl<T, C> OwnedCollection<T, C>
 where
-    T: GetId + Clone,
+    T: GetId,
     T::IdentifiableType: Owned,
 {
     pub fn new() -> Self {
@@ -263,7 +262,7 @@ where
 impl<T, C> OwnedCollection<T, C>
 where
     C: AppliedChange<OwnedEvent<T>>,
-    T: GetId + Clone,
+    T: GetId,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
     Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
@@ -351,7 +350,7 @@ mod owned_collection_tests {
         }
     }
 
-    #[derive(Debug, Eq, PartialEq, Clone)]
+    #[derive(Debug, Eq, PartialEq)]
     struct TestEntry {
         owner_id: i32,
         child_id: String,
@@ -468,7 +467,7 @@ mod owned_collection_tests {
 
     fn sorted<T>(mut events: Vec<FullChange<OwnedEvent<T>>>) -> Vec<FullChange<OwnedEvent<T>>>
     where
-        T: GetId + Clone,
+        T: GetId,
         T::IdentifiableType: Owned,
         Id<T::IdentifiableType>: hash::Hash + Clone + Ord,
         Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,

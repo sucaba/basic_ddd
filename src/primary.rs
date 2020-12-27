@@ -80,7 +80,6 @@ impl<T: GetId, C> Default for Primary<T, C> {
 impl<T, C> Clone for Primary<T, C>
 where
     T: GetId + Clone,
-    PrimaryEvent<T>: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -114,10 +113,7 @@ where
     PrimaryEvent<T>: Sized,
     Id<<T as GetId>::IdentifiableType>: Clone,
 {
-    pub fn new(row: T) -> (Self, C)
-    where
-        T: Clone,
-    {
+    pub fn new(row: T) -> (Self, C) {
         let mut result = Self {
             inner: None,
             marker: marker::PhantomData,
@@ -135,17 +131,11 @@ where
         self.inner.as_ref()
     }
 
-    pub fn create(&mut self, row: T) -> C
-    where
-        T: Clone,
-    {
+    pub fn create(&mut self, row: T) -> C {
         self.applied(Created(row))
     }
 
-    pub fn set(&mut self, row: T) -> StdResult<C, NotFound<T>>
-    where
-        T: Clone,
-    {
+    pub fn set(&mut self, row: T) -> StdResult<C, NotFound<T>> {
         if let Some(_) = &self.inner {
             Ok(self.applied(Updated(row)))
         } else {
@@ -167,10 +157,7 @@ where
         }
     }
 
-    pub fn delete(&mut self) -> StdResult<C, NotFound<()>>
-    where
-        T: Clone,
-    {
+    pub fn delete(&mut self) -> StdResult<C, NotFound<()>> {
         if let Some(existing) = &self.inner {
             let id = existing.get_id();
             Ok(self.applied(Deleted(id)))
@@ -182,7 +169,7 @@ where
 
 impl<T, C> Changable for Primary<T, C>
 where
-    T: GetId + Clone,
+    T: GetId,
     Id<T::IdentifiableType>: Clone,
 {
     type EventType = PrimaryEvent<T>;
