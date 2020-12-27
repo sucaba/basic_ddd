@@ -1,13 +1,31 @@
+use std::error::Error as StdError;
 use std::fmt;
 
 pub struct Error {
     inner: InnerError,
 }
 
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Error").field(&self.inner).finish()
+    }
+}
+
+impl fmt::Display for InnerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InnerError::ByMessage(m) => f.write_str(m),
+        }
+    }
+}
+
+impl StdError for Error {}
+
 pub struct AlreadyExists<T>(pub T);
 pub struct NotFound<T>(pub T);
 
 #[non_exhaustive]
+#[derive(Debug)]
 pub(crate) enum InnerError {
     ByMessage(String),
 }

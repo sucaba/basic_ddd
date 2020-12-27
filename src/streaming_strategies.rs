@@ -2,6 +2,7 @@ use crate::changable::Changable;
 use crate::streamable::Streamable;
 use crate::streaming::Stream;
 use crate::undoable::{UndoManager, Undoable};
+use std::error::Error;
 
 pub struct UndoRedoStreamingStrategy<'a, U: Undoable>
 where
@@ -51,11 +52,11 @@ impl<'a, U: Undoable> Streamable for UndoRedoStreamingStrategy<'a, U>
 where
     U::EventType: Clone,
 {
-    fn stream_to<S>(&mut self, stream: &mut S)
+    fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn Error>>
     where
         S: Stream<U::EventType>,
     {
-        stream.stream(self.events().into_iter().cloned());
+        stream.stream(self.events().into_iter().cloned())
     }
 }
 
@@ -85,11 +86,11 @@ impl<'a, U: Undoable> Streamable for CloneRedoStreamingStrategy<'a, U>
 where
     U::EventType: Clone,
 {
-    fn stream_to<S>(&mut self, stream: &mut S)
+    fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn Error>>
     where
         S: Stream<U::EventType>,
     {
-        stream.stream(self.events().into_iter().cloned());
+        stream.stream(self.events().into_iter().cloned())
     }
 }
 

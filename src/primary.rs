@@ -7,9 +7,9 @@ use std::cmp::{Eq, PartialEq};
 use std::fmt;
 use std::marker;
 use std::result::Result as StdResult;
-use PrimaryEvent::*;
+use MasterEvent::*;
 
-pub enum PrimaryEvent<T>
+pub enum MasterEvent<T>
 where
     T: GetId,
 {
@@ -18,7 +18,7 @@ where
     Deleted(Id<T::IdentifiableType>),
 }
 
-impl<T> fmt::Debug for PrimaryEvent<T>
+impl<T> fmt::Debug for MasterEvent<T>
 where
     T: fmt::Debug + GetId,
     Id<T::IdentifiableType>: fmt::Debug,
@@ -32,7 +32,7 @@ where
     }
 }
 
-impl<T> Clone for PrimaryEvent<T>
+impl<T> Clone for MasterEvent<T>
 where
     T: Clone + GetId,
     Id<T::IdentifiableType>: Clone,
@@ -46,9 +46,9 @@ where
     }
 }
 
-impl<T> Eq for PrimaryEvent<T> where T: GetId + Eq {}
+impl<T> Eq for MasterEvent<T> where T: GetId + Eq {}
 
-impl<T> PartialEq for PrimaryEvent<T>
+impl<T> PartialEq for MasterEvent<T>
 where
     T: GetId + PartialEq,
     Id<T::IdentifiableType>: PartialEq,
@@ -63,12 +63,12 @@ where
     }
 }
 
-pub struct Primary<T: GetId, C = FullChanges<PrimaryEvent<T>>> {
+pub struct Master<T: GetId, C = FullChanges<MasterEvent<T>>> {
     inner: Option<T>,
     marker: marker::PhantomData<C>,
 }
 
-impl<T: GetId, C> Default for Primary<T, C> {
+impl<T: GetId, C> Default for Master<T, C> {
     fn default() -> Self {
         Self {
             inner: None,
@@ -77,7 +77,7 @@ impl<T: GetId, C> Default for Primary<T, C> {
     }
 }
 
-impl<T, C> Clone for Primary<T, C>
+impl<T, C> Clone for Master<T, C>
 where
     T: GetId + Clone,
 {
@@ -89,28 +89,28 @@ where
     }
 }
 
-impl<T: GetId + Eq, C> Eq for Primary<T, C> {}
+impl<T: GetId + Eq, C> Eq for Master<T, C> {}
 
-impl<T: GetId + PartialEq, C> PartialEq for Primary<T, C> {
+impl<T: GetId + PartialEq, C> PartialEq for Master<T, C> {
     fn eq(&self, other: &Self) -> bool {
         self.inner.eq(&other.inner)
     }
 }
 
-impl<T, C> fmt::Debug for Primary<T, C>
+impl<T, C> fmt::Debug for Master<T, C>
 where
     T: GetId + fmt::Debug,
-    Vec<PrimaryEvent<T>>: fmt::Debug,
+    Vec<MasterEvent<T>>: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl<T: GetId, C> Primary<T, C>
+impl<T: GetId, C> Master<T, C>
 where
-    C: AppliedChange<PrimaryEvent<T>>,
-    PrimaryEvent<T>: Sized,
+    C: AppliedChange<MasterEvent<T>>,
+    MasterEvent<T>: Sized,
     Id<<T as GetId>::IdentifiableType>: Clone,
 {
     pub fn new(row: T) -> (Self, C) {
@@ -167,12 +167,12 @@ where
     }
 }
 
-impl<T, C> Changable for Primary<T, C>
+impl<T, C> Changable for Master<T, C>
 where
     T: GetId,
     Id<T::IdentifiableType>: Clone,
 {
-    type EventType = PrimaryEvent<T>;
+    type EventType = MasterEvent<T>;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
@@ -216,8 +216,8 @@ mod tests {
 
     const ID: i32 = 42;
 
-    fn setup() -> Primary<MyEntity> {
-        let (result, _changes): (_, FullChanges<_>) = Primary::new(MyEntity {
+    fn setup() -> Master<MyEntity> {
+        let (result, _changes): (_, FullChanges<_>) = Master::new(MyEntity {
             id: ID,
             name: "foo".into(),
         });

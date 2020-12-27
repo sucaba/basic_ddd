@@ -156,6 +156,7 @@ mod tests {
     use crate::streaming::Stream;
     use crate::streaming_strategies::CloneRedoStreamingStrategy;
     use pretty_assertions::assert_eq;
+    use std::error::Error as StdError;
     use TestEvent::*;
 
     #[derive(Debug, Eq, PartialEq)]
@@ -223,7 +224,7 @@ mod tests {
     }
 
     impl Streamable for TestEntry {
-        fn stream_to<S>(&mut self, stream: &mut S)
+        fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn StdError>>
         where
             S: Stream<Self::EventType>,
         {

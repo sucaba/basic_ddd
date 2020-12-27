@@ -11,9 +11,9 @@ use std::mem;
 use std::ops;
 use std::result::Result as StdResult;
 use std::slice;
-use OwnedEvent::*;
+use DetailsEvent::*;
 
-pub enum OwnedEvent<T>
+pub enum DetailsEvent<T>
 where
     T: GetId,
     T::IdentifiableType: Owned,
@@ -23,7 +23,7 @@ where
     Deleted(Id<<T as GetId>::IdentifiableType>),
 }
 
-impl<T> OwnedEvent<T>
+impl<T> DetailsEvent<T>
 where
     Id<T::IdentifiableType>: Clone,
     T: GetId,
@@ -64,7 +64,7 @@ pub enum EventMergeResult {
     Annihilated,
 }
 
-impl<T> fmt::Debug for OwnedEvent<T>
+impl<T> fmt::Debug for DetailsEvent<T>
 where
     T: fmt::Debug + GetId,
     T::IdentifiableType: Owned,
@@ -80,7 +80,7 @@ where
     }
 }
 
-impl<T> PartialEq for OwnedEvent<T>
+impl<T> PartialEq for DetailsEvent<T>
 where
     T: PartialEq + GetId,
     T::IdentifiableType: Owned,
@@ -95,14 +95,14 @@ where
     }
 }
 
-impl<T> Eq for OwnedEvent<T>
+impl<T> Eq for DetailsEvent<T>
 where
     T: Eq + GetId,
     T::IdentifiableType: Owned,
 {
 }
 
-impl<T> Clone for OwnedEvent<T>
+impl<T> Clone for DetailsEvent<T>
 where
     T: Clone + GetId,
     T::IdentifiableType: Owned,
@@ -118,7 +118,7 @@ where
     }
 }
 
-pub struct OwnedCollection<T, C = FullChanges<OwnedEvent<T>>>
+pub struct Details<T, C = FullChanges<DetailsEvent<T>>>
 where
     T: GetId,
     T::IdentifiableType: Owned,
@@ -128,14 +128,14 @@ where
     marker: marker::PhantomData<C>,
 }
 
-impl<T, C> Eq for OwnedCollection<T, C>
+impl<T, C> Eq for Details<T, C>
 where
     T: GetId + Eq,
     T::IdentifiableType: Owned,
 {
 }
 
-impl<T, C> PartialEq for OwnedCollection<T, C>
+impl<T, C> PartialEq for Details<T, C>
 where
     T: GetId + PartialEq,
     T::IdentifiableType: Owned,
@@ -145,7 +145,7 @@ where
     }
 }
 
-impl<T, C> fmt::Debug for OwnedCollection<T, C>
+impl<T, C> fmt::Debug for Details<T, C>
 where
     T: GetId + fmt::Debug,
     T::IdentifiableType: Owned,
@@ -157,7 +157,7 @@ where
     }
 }
 
-impl<T, C, I> ops::Index<I> for OwnedCollection<T, C>
+impl<T, C, I> ops::Index<I> for Details<T, C>
 where
     I: slice::SliceIndex<[T]>,
     T: GetId + fmt::Debug,
@@ -171,7 +171,7 @@ where
     }
 }
 
-impl<'a, T, C> IntoIterator for &'a OwnedCollection<T, C>
+impl<'a, T, C> IntoIterator for &'a Details<T, C>
 where
     T: GetId,
     T::IdentifiableType: Owned,
@@ -184,24 +184,24 @@ where
     }
 }
 
-impl<T, C> Default for OwnedCollection<T, C>
+impl<T, C> Default for Details<T, C>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
     Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
-    C: AppliedChange<OwnedEvent<T>>,
+    C: AppliedChange<DetailsEvent<T>>,
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T, C> Clone for OwnedCollection<T, C>
+impl<T, C> Clone for Details<T, C>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
-    OwnedEvent<T>: Clone,
+    DetailsEvent<T>: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -212,14 +212,14 @@ where
     }
 }
 
-impl<T, C> Changable for OwnedCollection<T, C>
+impl<T, C> Changable for Details<T, C>
 where
     T: GetId,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
     Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
 {
-    type EventType = OwnedEvent<T>;
+    type EventType = DetailsEvent<T>;
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
@@ -241,7 +241,7 @@ where
     }
 }
 
-impl<T, C> OwnedCollection<T, C>
+impl<T, C> Details<T, C>
 where
     T: GetId,
     T::IdentifiableType: Owned,
@@ -259,9 +259,9 @@ where
     }
 }
 
-impl<T, C> OwnedCollection<T, C>
+impl<T, C> Details<T, C>
 where
-    C: AppliedChange<OwnedEvent<T>>,
+    C: AppliedChange<DetailsEvent<T>>,
     T: GetId,
     T::IdentifiableType: Owned,
     Id<T::IdentifiableType>: hash::Hash + Clone,
@@ -329,7 +329,7 @@ where
 }
 
 #[cfg(test)]
-mod owned_collection_tests {
+mod tests {
 
     use super::*;
     use crate::changes::{FullChange, FullChanges};
@@ -403,10 +403,10 @@ mod owned_collection_tests {
         .into()
     }
 
-    type Sut = OwnedCollection<Rc<TestEntry>>;
+    type Sut = Details<Rc<TestEntry>>;
 
     fn setup() -> Sut {
-        let mut sut = OwnedCollection::new();
+        let mut sut = Details::new();
         sut.update_or_add(colored(ANY_NOT_USED_ENTRY_ID, None));
         sut.update_or_add(colored(EXISTING_ID, None));
         sut
@@ -416,7 +416,7 @@ mod owned_collection_tests {
     fn creation_event_is_streamed() {
         let mut sut = setup();
 
-        let mut changes = FullChanges::<OwnedEvent<Rc<TestEntry>>>::new();
+        let mut changes = FullChanges::<DetailsEvent<Rc<TestEntry>>>::new();
 
         changes.append(sut.update_or_add(colored(1, Red)));
         changes.append(sut.update_or_add(colored(2, Red)));
@@ -465,14 +465,14 @@ mod owned_collection_tests {
         );
     }
 
-    fn sorted<T>(mut events: Vec<FullChange<OwnedEvent<T>>>) -> Vec<FullChange<OwnedEvent<T>>>
+    fn sorted<T>(mut events: Vec<FullChange<DetailsEvent<T>>>) -> Vec<FullChange<DetailsEvent<T>>>
     where
         T: GetId,
         T::IdentifiableType: Owned,
         Id<T::IdentifiableType>: hash::Hash + Clone + Ord,
         Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
     {
-        events.sort_by_key(|c| OwnedEvent::get_id(c.redo()));
+        events.sort_by_key(|c| DetailsEvent::get_id(c.redo()));
         events
     }
 }

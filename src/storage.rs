@@ -3,7 +3,9 @@ use crate::identifiable::{Id, Identifiable};
 use crate::result::Result;
 use crate::streamable::{Streamable, Unstreamable};
 use crate::streaming::StreamAdapter;
+use std::error::Error as StdError;
 use std::fmt;
+use std::result::Result as StdResult;
 
 pub trait Load<T>
 where
@@ -13,7 +15,7 @@ where
 }
 
 pub trait Save<T> {
-    fn save(&mut self, root: T) -> Result<()>;
+    fn save(&mut self, root: T) -> StdResult<(), Box<dyn StdError>>;
 }
 
 struct EventEnvelope<T: Identifiable, TEvent> {
@@ -125,11 +127,10 @@ where
     T: Streamable<EventType = TEvent> + Identifiable,
     Id<T>: Clone,
 {
-    fn save(&mut self, mut root: T) -> Result<()> {
+    fn save(&mut self, mut root: T) -> StdResult<(), Box<dyn StdError>> {
         let id = root.id();
         let to_envelope = |e| EventEnvelope::new(id.clone(), e);
         let mut adapter = StreamAdapter::new(&mut self.events, to_envelope);
-        root.stream_to(&mut adapter);
-        Ok(())
+        root.stream_to(&mut adapter)
     }
 }

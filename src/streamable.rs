@@ -1,14 +1,15 @@
 use super::changable::Changable;
 use crate::streaming::*;
+use std::error::Error;
 
 pub trait Streamable: Changable {
-    fn stream_to<S>(&mut self, stream: &mut S)
+    fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn Error>>
     where
         S: Stream<Self::EventType>;
 
     fn take_changes(&mut self) -> Vec<Self::EventType> {
         let mut result = Vec::new();
-        self.stream_to(&mut result);
+        self.stream_to(&mut result).unwrap();
         result
     }
 }

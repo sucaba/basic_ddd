@@ -1,14 +1,16 @@
 #![allow(dead_code)]
 
+use std::error::Error as StdError;
 use std::rc::Rc;
+use std::result::Result as StdResult;
 
 use basic_ddd::{
-    Changable, CloneRedoStreamingStrategy, Error, FullChange, FullChanges, Id, Identifiable,
-    InMemoryStorage, Load, Owned, OwnedCollection, Primary, Record, Result, Save, Streamable,
+    Changable, CloneRedoStreamingStrategy, Details, Error, FullChange, FullChanges, Id,
+    Identifiable, InMemoryStorage, Load, Master, Owned, Record, Result, Save, Stream, Streamable,
     Undoable,
 };
 
-fn main() -> Result<()> {
+fn main() -> StdResult<(), Box<dyn StdError>> {
     let mut storage = InMemoryStorage::new();
 
     storage.save(create_new_order(0)?)?;
@@ -29,7 +31,7 @@ fn main() -> Result<()> {
 }
 
 fn create_new_order(id: i32) -> Result<Order> {
-    let mut order = Order::new(OrderPrimary {
+    let mut order = Order::new(OrderMaster {
         id,
         item_count: 777, // ignored
     });
@@ -45,23 +47,23 @@ const MAX_ORDER_ITEMS: usize = 2;
 
 #[derive(Default, Debug, Eq, PartialEq, Clone)]
 struct Order {
-    primary: Primary<OrderPrimary>,
-    items: OwnedCollection<Rc<OrderItem>>,
+    master: Master<OrderMaster>,
+    items: Details<Rc<OrderItem>>,
 
     changes: Record<FullChange<OrderEvent>>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 enum OrderEvent {
-    Primary(<Primary<OrderPrimary> as Changable>::EventType),
+    Primary(<Master<OrderMaster> as Changable>::EventType),
     Item(
-        Id<OrderPrimary>,
-        <OwnedCollection<Rc<OrderItem>> as Changable>::EventType,
+        Id<OrderMaster>,
+        <Details<Rc<OrderItem>> as Changable>::EventType,
     ),
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
-struct OrderPrimary {
+struct OrderMaster {
     id: i32,
     item_count: usize,
 }
@@ -72,20 +74,20 @@ struct OrderItem {
 }
 
 impl Order {
-    fn new(mut primary: OrderPrimary) -> Self {
+    fn new(mut primary: OrderMaster) -> Self {
         primary.item_count = 0;
 
-        let (primary, changes): (_, FullChanges<_>) = Primary::new(primary);
+        let (primary, changes): (_, FullChanges<_>) = Master::new(primary);
         let top_changes = changes.bubble_up(OrderEvent::Primary);
         Self {
-            primary,
+            master: primary,
             items: Default::default(),
             changes: top_changes.into(),
         }
     }
 
     fn item_count(&self) -> usize {
-        self.primary.get().item_count
+        self.master.get().item_count
     }
 
     /*
@@ -107,7 +109,7 @@ impl Order {
         trx.mutate_inner(
             |subj| -> Result<_> {
                 subj.validate_item_limit()?;
-                Ok(subj.primary.update(|p| p.item_count += 1)?)
+                Ok(subj.master.update(|p| p.item_count += 1)?)
             },
             OrderEvent::Primary,
         )?;
@@ -117,7 +119,7 @@ impl Order {
     }
 
     fn validate_item_limit(&self) -> Result<()> {
-        if self.primary.get().item_count == MAX_ORDER_ITEMS {
+        if self.master.get().item_count == MAX_ORDER_ITEMS {
             Err(Error::from_text("Too many".into()))
         } else {
             Ok(())
@@ -126,10 +128,10 @@ impl Order {
 }
 
 impl Identifiable for Order {
-    type IdType = <OrderPrimary as Identifiable>::IdType;
+    type IdType = <OrderMaster as Identifiable>::IdType;
 
     fn id(&self) -> Id<Order> {
-        self.primary.get().id().convert()
+        self.master.get().id().convert()
     }
 }
 
@@ -138,16 +140,16 @@ impl Changable for Order {
 
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
-            OrderEvent::Primary(e) => OrderEvent::Primary(self.primary.apply(e)),
+            OrderEvent::Primary(e) => OrderEvent::Primary(self.master.apply(e)),
             OrderEvent::Item(id, e) => OrderEvent::Item(id, self.items.apply(e)),
         }
     }
 }
 
 impl Streamable for Order {
-    fn stream_to<S>(&mut self, stream: &mut S)
+    fn stream_to<S>(&mut self, stream: &mut S) -> std::result::Result<(), Box<dyn StdError>>
     where
-        S: basic_ddd::Stream<Self::EventType>,
+        S: Stream<Self::EventType>,
     {
         let mut m = CloneRedoStreamingStrategy::new(self);
         m.stream_to(stream)
@@ -160,7 +162,7 @@ impl Undoable for Order {
     }
 }
 
-impl Identifiable for OrderPrimary {
+impl Identifiable for OrderMaster {
     type IdType = i32;
 
     fn id(&self) -> Id<Self> {
@@ -169,7 +171,7 @@ impl Identifiable for OrderPrimary {
 }
 
 impl Owned for OrderItem {
-    type OwnerType = OrderPrimary;
+    type OwnerType = OrderMaster;
 }
 
 impl Identifiable for OrderItem {
