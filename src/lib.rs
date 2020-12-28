@@ -1,9 +1,9 @@
 mod changable;
 mod change_abs;
 mod changes;
+mod details;
 mod identifiable;
-mod owned_collection;
-mod primary;
+mod master;
 pub mod result;
 mod storage;
 mod streamable;
@@ -14,9 +14,9 @@ mod undoable;
 
 pub use changable::*;
 pub use changes::*;
+pub use details::*;
 pub use identifiable::*;
-pub use owned_collection::*;
-pub use primary::*;
+pub use master::*;
 pub use result::*;
 pub use storage::*;
 pub use streamable::*;
