@@ -19,7 +19,7 @@ where
     T::IdentifiableType: Owned,
 {
     Created(T),
-    Updated(usize, T),
+    Updated(T),
     Deleted(Id<<T as GetId>::IdentifiableType>),
 }
 
@@ -32,7 +32,7 @@ where
     pub fn get_id(&self) -> Option<Id<T::IdentifiableType>> {
         match self {
             Created(x) => Some(x.get_id()),
-            Updated(_, x) => Some(x.get_id()),
+            Updated(x) => Some(x.get_id()),
             Deleted(id) => Some(id.clone()),
         }
     }
@@ -41,16 +41,16 @@ where
         use EventMergeResult::*;
 
         match (self as &_, new) {
-            (Created(_), Updated(_, now)) => {
+            (Created(_), Updated(now)) => {
                 *self = Created(now);
                 Combined
             }
-            (Updated(_, _), Updated(pos, now)) => {
-                *self = Updated(pos, now);
+            (Updated(_), Updated(now)) => {
+                *self = Updated(now);
                 Combined
             }
             (Created(_), Deleted(_)) => Annihilated,
-            (Updated(_, _), Deleted(id)) => {
+            (Updated(_), Deleted(id)) => {
                 *self = Deleted(id);
                 Combined
             }
@@ -74,7 +74,7 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Created(x) => write!(f, "DbOwnedEvent::Created({:?})", x),
-            Updated(pos, x) => write!(f, "DbOwnedEvent::Updated({:?}, {:?})", pos, x),
+            Updated(x) => write!(f, "DbOwnedEvent::Updated({:?})", x),
             Deleted(x) => write!(f, "DbOwnedEvent::Deleted({:?})", x),
         }
     }
@@ -88,7 +88,7 @@ where
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Created(x), Created(y)) => x == y,
-            (Updated(pos1, x), Updated(pos2, y)) => pos1 == pos2 && x == y,
+            (Updated(x), Updated(y)) => x == y,
             (Deleted(x), Deleted(y)) => x == y,
             _ => false,
         }
@@ -112,7 +112,7 @@ where
     fn clone(&self) -> Self {
         match self {
             Created(x) => Created(x.clone()),
-            Updated(pos, x) => Updated(pos.clone(), x.clone()),
+            Updated(x) => Updated(x.clone()),
             Deleted(x) => Deleted(x.clone()),
         }
     }
@@ -228,13 +228,15 @@ where
                 self.inner.push(x);
                 Deleted(id)
             }
-            Updated(pos, x) => {
+            Updated(x) => {
+                let id = x.get_id();
+                let pos = self.position_by_id(&id).expect("Dev error: id not found");
                 let old = mem::replace(&mut self.inner[pos], x);
-                Updated(pos, old)
+                Updated(old)
             }
             Deleted(id) => {
-                let i = self.position_by_id(&id).expect("Dev error: id not found");
-                let old = self.inner.remove(i);
+                let pos = self.position_by_id(&id).expect("Dev error: id not found");
+                let old = self.inner.remove(pos);
                 Created(old)
             }
         }
@@ -288,8 +290,8 @@ where
      * Updates existing item or returns item back as a Result::Err
      */
     pub fn update(&mut self, item: T) -> StdResult<C, NotFound<T>> {
-        if let Some(pos) = self.position_by_id(&item.get_id()) {
-            Ok(self.applied(Updated(pos, item)))
+        if self.position_by_id(&item.get_id()).is_some() {
+            Ok(self.applied(Updated(item)))
         } else {
             Err(NotFound(item))
         }
@@ -392,7 +394,6 @@ mod tests {
 
     const ANY_NOT_USED_ENTRY_ID: usize = 10000;
     const EXISTING_ID: usize = 0;
-    const EXISTING_POS: usize = 1;
 
     fn colored(seed: usize, c: Color) -> Rc<TestEntry> {
         TestEntry {
@@ -439,8 +440,8 @@ mod tests {
         assert_eq!(
             changes,
             vec![FullChange::new(
-                Updated(EXISTING_POS, colored(EXISTING_ID, Red)),
-                Updated(EXISTING_POS, colored(EXISTING_ID, None))
+                Updated(colored(EXISTING_ID, Red)),
+                Updated(colored(EXISTING_ID, None))
             )]
         );
     }
