@@ -21,8 +21,13 @@ impl fmt::Display for InnerError {
 
 impl StdError for Error {}
 
+#[derive(Debug)]
 pub struct AlreadyExists<T>(pub T);
+#[derive(Debug)]
 pub struct NotFound<T>(pub T);
+
+impl<T: fmt::Debug> StdError for AlreadyExists<T> {}
+impl<T: fmt::Debug> StdError for NotFound<T> {}
 
 #[non_exhaustive]
 #[derive(Debug)]
@@ -76,14 +81,14 @@ impl From<String> for Error {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for AlreadyExists<T> {
+impl<T: fmt::Debug> fmt::Display for AlreadyExists<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("Already exists: ")?;
         self.0.fmt(f)
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for NotFound<T> {
+impl<T: fmt::Debug> fmt::Display for NotFound<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("Not found: ")?;
         self.0.fmt(f)

@@ -147,7 +147,7 @@ impl Changable for Order {
 }
 
 impl Streamable for Order {
-    fn stream_to<S>(&mut self, stream: &mut S) -> std::result::Result<(), Box<dyn StdError>>
+    fn stream_to<S>(&mut self, stream: &mut S) -> StdResult<(), Box<dyn StdError>>
     where
         S: Stream<Self::EventType>,
     {
