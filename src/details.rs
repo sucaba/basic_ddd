@@ -2,6 +2,7 @@ use super::identifiable::*;
 use crate::changable::Changable;
 use crate::change_abs::AppliedChange;
 use crate::changes::FullChanges;
+use crate::historic::Historic;
 use crate::result::{AlreadyExists, NotFound};
 use std::cmp::{Eq, PartialEq};
 use std::fmt;
@@ -212,6 +213,14 @@ where
     }
 }
 
+impl<T, C> Historic for Details<T, C>
+where
+    T: GetId,
+    T::IdentifiableType: Owned,
+{
+    type EventType = DetailsEvent<T>;
+}
+
 impl<T, C> Changable for Details<T, C>
 where
     T: GetId,
@@ -219,8 +228,6 @@ where
     Id<T::IdentifiableType>: hash::Hash + Clone,
     Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
 {
-    type EventType = DetailsEvent<T>;
-
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
             Created(x) => {

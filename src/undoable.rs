@@ -152,6 +152,7 @@ impl<'a, T: Undoable> Drop for Atomic<'a, T> {
 mod tests {
     use super::*;
     use crate::changes::FullChange;
+    use crate::historic::Historic;
     use crate::streamable::Streamable;
     use crate::streaming::Stream;
     use crate::streaming_strategies::CloneRedoStreamingStrategy;
@@ -202,9 +203,11 @@ mod tests {
         }
     }
 
-    impl Changable for TestEntry {
+    impl Historic for TestEntry {
         type EventType = TestEvent;
+    }
 
+    impl Changable for TestEntry {
         fn apply(&mut self, event: Self::EventType) -> Self::EventType {
             match (self.state, event) {
                 (Stopped, Started) | (Paused, Started) | (Started, Stopped) | (Started, Paused) => {

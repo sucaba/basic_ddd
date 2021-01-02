@@ -1,4 +1,5 @@
 use crate::changable::Changable;
+use crate::historic::Historic;
 use crate::streamable::Streamable;
 use crate::streaming::Stream;
 use crate::undoable::{UndoManager, Undoable};
@@ -37,12 +38,17 @@ where
     }
 }
 
-impl<'a, U: Undoable> Changable for UndoRedoStreamingStrategy<'a, U>
+impl<'a, U: Undoable> Historic for UndoRedoStreamingStrategy<'a, U>
 where
     U::EventType: Clone,
 {
     type EventType = U::EventType;
+}
 
+impl<'a, U: Undoable> Changable for UndoRedoStreamingStrategy<'a, U>
+where
+    U::EventType: Clone,
+{
     fn apply(&mut self, _event: Self::EventType) -> Self::EventType {
         unimplemented!("Cannot modify through the strategy")
     }
@@ -94,12 +100,17 @@ where
     }
 }
 
-impl<'a, U: Undoable> Changable for CloneRedoStreamingStrategy<'a, U>
+impl<'a, U: Undoable> Historic for CloneRedoStreamingStrategy<'a, U>
 where
     U::EventType: Clone,
 {
     type EventType = U::EventType;
+}
 
+impl<'a, U: Undoable> Changable for CloneRedoStreamingStrategy<'a, U>
+where
+    U::EventType: Clone,
+{
     fn apply(&mut self, _event: Self::EventType) -> Self::EventType {
         unimplemented!("Cannot modify through the strategy")
     }

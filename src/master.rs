@@ -1,5 +1,6 @@
 use crate::changable::Changable;
 use crate::change_abs::AppliedChange;
+use crate::historic::Historic;
 use crate::identifiable::*;
 use crate::result::NotFound;
 use crate::FullChanges;
@@ -171,13 +172,19 @@ where
     }
 }
 
-impl<T, C> Changable for Master<T, C>
+impl<T, C> Historic for Master<T, C>
 where
     T: GetId,
     Id<T::IdentifiableType>: Clone,
 {
     type EventType = MasterEvent<T>;
+}
 
+impl<T, C> Changable for Master<T, C>
+where
+    T: GetId,
+    Id<T::IdentifiableType>: Clone,
+{
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
             Created(x) => {

@@ -1,9 +1,10 @@
 use super::changable::Changable;
 use crate::contextual::Contextual;
+use crate::historic::Historic;
 use crate::streaming::*;
 use std::error::Error;
 
-pub trait Streamable: Changable {
+pub trait Streamable: Historic {
     fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn Error>>
     where
         S: Stream<Self::EventType>;
@@ -26,7 +27,7 @@ impl<'a, T: Streamable> Streamable for &'a T {
 }
 */
 
-pub trait StreamableInContext<TCtx>: Changable {
+pub trait StreamableInContext<TCtx>: Historic {
     fn stream_in_context_to<S>(
         &mut self,
         context: &mut TCtx,
@@ -42,9 +43,11 @@ pub trait StreamableInContext<TCtx>: Changable {
     }
 }
 
-impl<T: Changable, TCtx> Changable for Contextual<T, TCtx> {
+impl<T: Historic, TCtx> Historic for Contextual<T, TCtx> {
     type EventType = T::EventType;
+}
 
+impl<T: Changable, TCtx> Changable for Contextual<T, TCtx> {
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         self.subject.apply(event)
     }
@@ -110,7 +113,6 @@ mod tests {
 
     #[derive(Debug, Eq, PartialEq)]
     enum MyEvent {
-        Dummy,
         Captured(MyContext),
     }
 
@@ -132,11 +134,7 @@ mod tests {
         }
     }
 
-    impl Changable for MyEntity {
+    impl Historic for MyEntity {
         type EventType = MyEvent;
-
-        fn apply(&mut self, _event: Self::EventType) -> Self::EventType {
-            Dummy
-        }
     }
 }

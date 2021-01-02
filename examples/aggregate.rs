@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::result::Result as StdResult;
 
 use basic_ddd::{
-    Changable, CloneRedoStreamingStrategy, Details, Error, FullChange, FullChanges, Id,
+    Changable, CloneRedoStreamingStrategy, Details, Error, FullChange, FullChanges, Historic, Id,
     Identifiable, InMemoryStorage, Load, Master, Owned, Record, Result, Save, Stream, Streamable,
     Undoable,
 };
@@ -55,10 +55,10 @@ struct Order {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 enum OrderEvent {
-    Primary(<Master<OrderMaster> as Changable>::EventType),
+    Primary(<Master<OrderMaster> as Historic>::EventType),
     Item(
         Id<OrderMaster>,
-        <Details<Rc<OrderItem>> as Changable>::EventType,
+        <Details<Rc<OrderItem>> as Historic>::EventType,
     ),
 }
 
@@ -135,9 +135,11 @@ impl Identifiable for Order {
     }
 }
 
-impl Changable for Order {
+impl Historic for Order {
     type EventType = OrderEvent;
+}
 
+impl Changable for Order {
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
             OrderEvent::Primary(e) => OrderEvent::Primary(self.master.apply(e)),

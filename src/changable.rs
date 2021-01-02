@@ -1,8 +1,7 @@
 use crate::change_abs::AppliedChange;
+use crate::historic::Historic;
 
-pub trait Changable: Sized {
-    type EventType;
-
+pub trait Changable: Historic {
     fn apply(&mut self, event: Self::EventType) -> Self::EventType;
 
     fn applied<C>(&mut self, e: Self::EventType) -> C
