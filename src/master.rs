@@ -123,6 +123,10 @@ where
         (result, changes)
     }
 
+    pub fn try_get_id(&self) -> Option<Id<T::IdentifiableType>> {
+        self.inner.as_ref().map(GetId::get_id)
+    }
+
     pub fn get(&self) -> &T {
         self.inner.as_ref().expect("not deleted")
     }

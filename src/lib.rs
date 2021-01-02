@@ -1,6 +1,7 @@
 mod changable;
 mod change_abs;
 mod changes;
+mod contextual;
 mod details;
 mod identifiable;
 mod master;
@@ -14,6 +15,7 @@ mod undoable;
 
 pub use changable::*;
 pub use changes::*;
+pub use contextual::*;
 pub use details::*;
 pub use identifiable::*;
 pub use master::*;

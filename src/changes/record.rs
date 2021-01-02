@@ -97,6 +97,15 @@ impl<T> iter::IntoIterator for Record<T> {
     }
 }
 
+impl<'a, T> iter::IntoIterator for &'a Record<T> {
+    type Item = &'a T;
+    type IntoIter = <&'a Vec<T> as iter::IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        (&self.undos).into_iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
