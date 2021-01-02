@@ -97,7 +97,7 @@ mod tests {
     #[test]
     fn stream_in_context() {
         let entity_to_stream = MyEntity;
-        let mut context = MyContext { name: "exotic" };
+        let context = MyContext { name: "exotic" };
 
         let mut sut = entity_to_stream.in_context(context);
         let mut stream = Vec::new();
