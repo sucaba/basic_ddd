@@ -21,7 +21,7 @@ where
     Defs: IntoIterator<Item = &'a D>,
     R: 'a + SingleReference<D>,
     D: 'a + Identifiable,
-    D::IdType: Ord,
+    Id<D>: Ord,
 {
     refs.into_iter()
         .merge_join_by(defs, |x, y| {
