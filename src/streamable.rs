@@ -1,7 +1,6 @@
 use super::changable::Changable;
 use crate::contextual::Contextual;
 use crate::historic::Historic;
-use crate::identifiable::{Id, Identifiable};
 use crate::streaming::*;
 use std::hash::Hash;
 use std::{collections::HashMap, error::Error};
@@ -76,12 +75,11 @@ pub trait Unstreamable: Changable + Default + Sized {
     where
         I: IntoIterator<Item = Self::EventType>;
 
-    fn load_many<I>(events: I) -> crate::result::Result<Vec<Self>>
+    fn load_many<I,ID>(events: I) -> crate::result::Result<Vec<Self>>
     where
-        Self: Identifiable,
         Self::EventType: SupportsDeletion,
-        I: IntoIterator<Item = (Id<Self>, Self::EventType)>,
-        Id<Self>: Hash;
+        I: IntoIterator<Item = (ID, Self::EventType)>,
+        ID: Hash + Eq;
 }
 
 impl<T> Unstreamable for T
@@ -100,14 +98,13 @@ where
         Ok(result)
     }
 
-    fn load_many<I>(events: I) -> crate::result::Result<Vec<Self>>
+    fn load_many<I,ID>(events: I) -> crate::result::Result<Vec<Self>>
     where
-        Self: Identifiable,
         Self::EventType: SupportsDeletion,
-        I: IntoIterator<Item = (Id<Self>, Self::EventType)>,
-        Id<Self>: Hash,
+        I: IntoIterator<Item = (ID, Self::EventType)>,
+        ID: Hash + Eq,
     {
-        let mut map = HashMap::<Id<Self>, Self>::new();
+        let mut map = HashMap::<ID, Self>::new();
         for (id, e) in events {
             if e.is_deletion() {
                 let _ = map.remove_entry(&id);
@@ -127,6 +124,7 @@ mod tests {
 
     use super::*;
     use crate::contextual::InContext;
+    use crate::identifiable::{Id, Identifiable};
     use pretty_assertions::assert_eq;
     use MyEvent::*;
     use MyUnstreamableEvent::*;
@@ -148,8 +146,8 @@ mod tests {
     #[test]
     fn should_load_multiple() {
         let events = vec![
-            (Id::new(42), Created(Id::new(42), "red")),
-            (Id::new(13), Created(Id::new(13), "green")),
+            (42, Created(Id::new(42), "red")),
+            (13, Created(Id::new(13), "green")),
         ];
 
         let mut loaded = MyUnstreamable::load_many(events);
@@ -166,9 +164,9 @@ mod tests {
     #[test]
     fn should_omit_deleted_when_loading_multiple() {
         let events = vec![
-            (Id::new(42), Created(Id::new(42), "red")),
-            (Id::new(13), Created(Id::new(13), "green")),
-            (Id::new(42), Deleted(Id::new(42))),
+            (42, Created(Id::new(42), "red")),
+            (13, Created(Id::new(13), "green")),
+            (42, Deleted(Id::new(42))),
         ];
 
         let loaded = MyUnstreamable::load_many(events);
