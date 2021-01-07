@@ -13,6 +13,7 @@ mod streaming;
 mod streaming_strategies;
 mod test_utils;
 mod undoable;
+pub mod joins;
 
 pub use changable::*;
 pub use changes::*;
@@ -27,13 +28,3 @@ pub use streamable::*;
 pub use streaming::*;
 pub use streaming_strategies::*;
 pub use undoable::*;
-
-pub trait ManyReferences<OtherType: Identifiable> {
-    type Iter: Iterator<Item = Id<OtherType>>;
-
-    fn references(&self) -> Self::Iter;
-}
-
-pub trait SingleReference<OtherType: Identifiable> {
-    fn reference(&self) -> Id<OtherType>;
-}
