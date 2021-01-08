@@ -72,7 +72,12 @@ impl<T: Identifiable> Id<T> {
         Self { id }
     }
 
+    #[deprecated(note = "Use `raw` instead")]
     pub fn id(&self) -> &T::IdType {
+        self.raw()
+    }
+
+    pub fn raw(&self) -> &T::IdType {
         &self.id
     }
 

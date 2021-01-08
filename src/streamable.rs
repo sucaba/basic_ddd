@@ -75,7 +75,7 @@ pub trait Unstreamable: Changable + Default + Sized {
     where
         I: IntoIterator<Item = Self::EventType>;
 
-    fn load_many<I,ID>(events: I) -> crate::result::Result<Vec<Self>>
+    fn load_many<I, ID>(events: I) -> crate::result::Result<Vec<Self>>
     where
         Self::EventType: SupportsDeletion,
         I: IntoIterator<Item = (ID, Self::EventType)>,
@@ -98,7 +98,7 @@ where
         Ok(result)
     }
 
-    fn load_many<I,ID>(events: I) -> crate::result::Result<Vec<Self>>
+    fn load_many<I, ID>(events: I) -> crate::result::Result<Vec<Self>>
     where
         Self::EventType: SupportsDeletion,
         I: IntoIterator<Item = (ID, Self::EventType)>,
@@ -195,7 +195,7 @@ mod tests {
         fn apply(&mut self, event: Self::EventType) -> Self::EventType {
             match event {
                 Created(id, name) => {
-                    self.0 = *id.id();
+                    self.0 = *id.raw();
                     self.1 = name;
                     Deleted(id)
                 }
