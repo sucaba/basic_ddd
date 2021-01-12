@@ -1,6 +1,6 @@
 use super::identifiable::*;
 use crate::changable::Changable;
-use crate::change_abs::AppliedChange;
+use crate::change_abs::{AppliedChange, NoopChange};
 use crate::changes::FullChanges;
 use crate::historic::Historic;
 use crate::result::{AlreadyExists, NotFound};
@@ -161,7 +161,7 @@ where
 impl<T, C, I> ops::Index<I> for Details<T, C>
 where
     I: slice::SliceIndex<[T]>,
-    T: GetId + fmt::Debug,
+    T: GetId,
     T::IdentifiableType: Owned,
 {
     type Output = I::Output;
@@ -266,6 +266,16 @@ where
     fn position_by_id(&self, id: &Id<T::IdentifiableType>) -> Option<usize> {
         self.inner.iter().position(|x| &x.get_id() == id)
     }
+
+    pub fn get<I>(
+        &self,
+        index: I,
+    ) -> Option<&<I as slice::SliceIndex<[T]>>::Output>
+    where
+        I: slice::SliceIndex<[T]>,
+    {
+        self.inner.get(index)
+    }
 }
 
 impl<T, C> Details<T, C>
@@ -286,7 +296,8 @@ where
 
     pub fn update_or_add(&mut self, item: T) -> C
     where
-        T: fmt::Debug,
+        T: Eq + fmt::Debug,
+        C: NoopChange,
     {
         self.update(item)
             .or_else(|NotFound(x)| self.add_new(x))
@@ -296,9 +307,17 @@ where
     /**
      * Updates existing item or returns item back as a Result::Err
      */
-    pub fn update(&mut self, item: T) -> StdResult<C, NotFound<T>> {
-        if self.position_by_id(&item.get_id()).is_some() {
-            Ok(self.applied(Updated(item)))
+    pub fn update(&mut self, item: T) -> StdResult<C, NotFound<T>>
+    where
+        C: NoopChange,
+        T: Eq,
+    {
+        if let Some(pos) = self.position_by_id(&item.get_id()) {
+            if &item == ops::Index::index(self, pos) {
+                Ok(C::noop())
+            } else {
+                Ok(self.applied(Updated(item)))
+            }
         } else {
             Err(NotFound(item))
         }
@@ -308,7 +327,11 @@ where
      * Inserts a new item and returns `Ok(())` if item with the same id does not exist.
      * Returns `Err(item)` if item with the same already exists.
      */
-    pub fn add_new(&mut self, item: T) -> StdResult<C, AlreadyExists<T>> {
+    pub fn add_new(&mut self, item: T) -> StdResult<C, AlreadyExists<T>>
+    where
+        C: NoopChange,
+        T: Eq,
+    {
         let id = item.get_id();
         if let None = self.position_by_id(&id) {
             Ok(self.applied(Created(item)))
@@ -421,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn creation_event_is_streamed() {
+    fn creation_event_is_emitted() {
         let mut sut = setup();
 
         let mut changes = FullChanges::<DetailsEvent<Rc<TestEntry>>>::new();
@@ -439,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn update_event_is_streamed() {
+    fn update_event_is_emitted() {
         let mut sut = setup();
 
         let changes: Vec<_> = sut.update_or_add(colored(EXISTING_ID, Red)).into();
@@ -454,7 +477,7 @@ mod tests {
     }
 
     #[test]
-    fn delete_event_is_streamed() {
+    fn delete_event_is_emitted() {
         let mut sut = setup();
 
         let id = colored(EXISTING_ID, Red).get_id();

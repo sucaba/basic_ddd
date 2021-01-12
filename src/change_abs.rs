@@ -6,6 +6,10 @@ pub trait AppliedChange<T> {
         F: FnOnce(T) -> T;
 }
 
+pub trait NoopChange {
+    fn noop() -> Self;
+}
+
 impl<T> AppliedChange<T> for FullChange<T>
 where
     T: Clone,
@@ -29,5 +33,11 @@ where
     {
         let undo = make_undo(redo.clone());
         FullChanges::only(FullChange::new(redo, undo))
+    }
+}
+
+impl<T> NoopChange for FullChanges<T> {
+    fn noop() -> Self {
+        Self::new()
     }
 }
