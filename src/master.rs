@@ -1,4 +1,4 @@
-use crate::changable::Changable;
+use crate::{changable::Changable, change_abs::NoopChange};
 use crate::change_abs::AppliedChange;
 use crate::historic::Historic;
 use crate::identifiable::*;
@@ -140,9 +140,16 @@ where
         self.applied(Created(row))
     }
 
-    pub fn set(&mut self, row: T) -> StdResult<C, NotFound<T>> {
-        if let Some(_) = &self.inner {
-            Ok(self.applied(Updated(row)))
+    pub fn set(&mut self, row: T) -> StdResult<C, NotFound<T>>
+    where T: Eq,
+          C: NoopChange
+    {
+        if let Some(current) = &self.inner {
+            if current == &row {
+                Ok(C::noop())
+            } else {
+                Ok(self.applied(Updated(row)))
+            }
         } else {
             Err(NotFound(row))
         }
@@ -151,12 +158,18 @@ where
     pub fn update<F>(&mut self, f: F) -> StdResult<C, NotFound<()>>
     where
         F: FnOnce(&mut T),
-        T: Clone,
+        T: Eq + Clone,
+        C: NoopChange
     {
         if let Some(existing) = &self.inner {
             let mut modified = existing.clone();
             f(&mut modified);
-            Ok(self.applied(Updated(modified)))
+
+            if existing == &modified {
+                Ok(C::noop())
+            } else {
+                Ok(self.applied(Updated(modified)))
+            }
         } else {
             Err(NotFound(()))
         }
