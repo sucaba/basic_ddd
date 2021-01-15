@@ -267,10 +267,7 @@ where
         self.inner.iter().position(|x| &x.get_id() == id)
     }
 
-    pub fn get<I>(
-        &self,
-        index: I,
-    ) -> Option<&<I as slice::SliceIndex<[T]>>::Output>
+    pub fn get<I>(&self, index: I) -> Option<&<I as slice::SliceIndex<[T]>>::Output>
     where
         I: slice::SliceIndex<[T]>,
     {
@@ -288,6 +285,13 @@ where
 {
     pub fn iter(&self) -> slice::Iter<'_, T> {
         self.inner.iter()
+    }
+
+    pub fn find<P>(&self, mut predicate: P) -> Option<&T>
+    where
+        P: FnMut(&T) -> bool,
+    {
+        self.inner.iter().find(|x| predicate(x))
     }
 
     pub fn len(&self) -> usize {
