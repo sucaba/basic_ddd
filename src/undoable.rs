@@ -79,8 +79,8 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
         T::EventType: Clone,
     {
         if let Some(c) = self.changes_mut().pop_undo() {
-            let change = self.subj.applied(c.take_undo());
-            self.changes_mut().push_redo(change);
+            let change: FullChanges<T::EventType> = self.subj.applied(c.take_undo());
+            self.changes_mut().append_redos(change);
             true
         } else {
             false
@@ -92,8 +92,8 @@ impl<'a, T: Undoable> UndoManager<'a, T> {
         T::EventType: Clone,
     {
         if let Some(c) = self.changes_mut().pop_redo() {
-            let change = self.subj.applied(c.take_undo());
-            self.changes_mut().push_undo(change);
+            let change: FullChanges<T::EventType> = self.subj.applied(c.take_undo());
+            self.changes_mut().append_undos(change);
             true
         } else {
             false
@@ -190,8 +190,8 @@ mod tests {
         fn start(&mut self) -> Result<(), String> {
             self.validate_not_started()?;
 
-            let change = self.applied(Started);
-            self.changes.push_undo(change);
+            let change: FullChanges<_> = self.applied(Started);
+            self.changes.append_undos(change);
             Ok(())
         }
 

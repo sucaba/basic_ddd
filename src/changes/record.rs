@@ -37,8 +37,16 @@ impl<T> Record<T> {
         self.undos.push(entry)
     }
 
+    pub fn append_undos(&mut self, entries: impl IntoIterator<Item = T>) {
+        self.undos.extend(entries)
+    }
+
     pub fn push_redo(&mut self, entry: T) {
         self.redos.push(entry)
+    }
+
+    pub fn append_redos(&mut self, entries: impl IntoIterator<Item = T>) {
+        self.redos.extend(entries)
     }
 
     pub fn pop_undo(&mut self) -> Option<T> {

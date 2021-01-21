@@ -298,6 +298,42 @@ where
         self.inner.len()
     }
 
+    /// Replaces all items in collection and returns diff-change
+    /// which represents removal, update and creation of items as
+    /// necessary
+    pub fn set_all(&mut self, items: impl IntoIterator<Item = T>) -> C
+    where
+        T: Eq + fmt::Debug,
+    {
+        let mut changes = Vec::new();
+
+        let mut existing_ids: Vec<_> = self.inner.iter().map(GetId::get_id).collect();
+
+        let mut new_ids = Vec::new();
+
+        for x in items {
+            new_ids.push(x.get_id());
+            if let Some(pos) = self.position_by_id(&x.get_id()) {
+                if &x != &self.inner[pos] {
+                    changes.push(Updated(x));
+                }
+            } else {
+                changes.push(Created(x));
+            }
+        }
+
+        let missing_ids = {
+            existing_ids.retain(|x| !new_ids.contains(x));
+            existing_ids
+        };
+
+        for id in missing_ids {
+            changes.push(Deleted(id));
+        }
+
+        self.applied_many(changes)
+    }
+
     pub fn update_or_add(&mut self, item: T) -> C
     where
         T: Eq + fmt::Debug,
@@ -428,11 +464,21 @@ mod tests {
 
     const ANY_NOT_USED_ENTRY_ID: usize = 10000;
     const EXISTING_ID: usize = 0;
+    const DELETED_ID: usize = 1;
+    const NEW_ID: usize = 2;
 
-    fn colored(seed: usize, c: Color) -> Rc<TestEntry> {
+    fn colored_id(seed: usize) -> Id<TestEntry> {
+        Id::new(raw_colored_id(seed))
+    }
+
+    fn raw_colored_id(number: usize) -> String {
+        number.to_string()
+    }
+
+    fn colored(number: usize, c: Color) -> Rc<TestEntry> {
         TestEntry {
             owner_id: 1,
-            child_id: (100 + seed).to_string(),
+            child_id: raw_colored_id(number),
             name: format!("{:#?}", c),
         }
         .into()
@@ -440,34 +486,34 @@ mod tests {
 
     type Sut = Details<Rc<TestEntry>>;
 
-    fn setup() -> Sut {
+    fn setup_existing() -> Sut {
         let mut sut = Details::new();
         sut.update_or_add(colored(ANY_NOT_USED_ENTRY_ID, None));
         sut.update_or_add(colored(EXISTING_ID, None));
+        sut.update_or_add(colored(DELETED_ID, None));
         sut
     }
 
     #[test]
     fn creation_event_is_emitted() {
-        let mut sut = setup();
+        let mut sut = setup_existing();
 
         let mut changes = FullChanges::<DetailsEvent<Rc<TestEntry>>>::new();
 
-        changes.append(sut.update_or_add(colored(1, Red)));
-        changes.append(sut.update_or_add(colored(2, Red)));
+        changes.append(sut.update_or_add(colored(NEW_ID, Red)));
 
         assert_eq!(
             sorted(changes.into()),
-            vec![
-                FullChange::new(Created(colored(1, Red)), Deleted(colored(1, Red).get_id())),
-                FullChange::new(Created(colored(2, Red)), Deleted(colored(2, Red).get_id()))
-            ]
+            vec![FullChange::new(
+                Created(colored(NEW_ID, Red)),
+                Deleted(colored_id(NEW_ID))
+            ),]
         );
     }
 
     #[test]
     fn update_event_is_emitted() {
-        let mut sut = setup();
+        let mut sut = setup_existing();
 
         let changes: Vec<_> = sut.update_or_add(colored(EXISTING_ID, Red)).into();
 
@@ -482,7 +528,7 @@ mod tests {
 
     #[test]
     fn delete_event_is_emitted() {
-        let mut sut = setup();
+        let mut sut = setup_existing();
 
         let id = colored(EXISTING_ID, Red).get_id();
         let removed = sut.remove_by_id(&id);
@@ -500,14 +546,44 @@ mod tests {
         );
     }
 
-    fn sorted<T>(mut events: Vec<FullChange<DetailsEvent<T>>>) -> Vec<FullChange<DetailsEvent<T>>>
+    #[test]
+    #[rustfmt::skip]
+    fn patch_changes_are_emitted() {
+        let mut sut = setup_existing();
+
+        let changes: Vec<_> = sut
+            .set_all(vec![
+                colored(ANY_NOT_USED_ENTRY_ID, None), // same
+                colored(EXISTING_ID, Red),            // to update
+                colored(NEW_ID, Red),                 // to create
+                // colored(DELETED_ID, None),         // to delete
+            ])
+            .into();
+
+        assert_eq!(
+            changes,
+            vec![
+                FullChange::new(
+                    Updated(colored(EXISTING_ID, Red)),
+                    Updated(colored(EXISTING_ID, None))
+                ),
+                FullChange::new(Created(colored(NEW_ID, Red)), Deleted(colored_id(NEW_ID))),
+                FullChange::new(
+                    Deleted(colored_id(DELETED_ID)),
+                    Created(colored(DELETED_ID, None))
+                ),
+            ]
+        );
+    }
+
+    fn sorted<T>(mut changes: Vec<FullChange<DetailsEvent<T>>>) -> Vec<FullChange<DetailsEvent<T>>>
     where
         T: GetId,
         T::IdentifiableType: Owned,
         Id<T::IdentifiableType>: hash::Hash + Clone + Ord,
         Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
     {
-        events.sort_by_key(|c| DetailsEvent::get_id(c.redo()));
-        events
+        changes.sort_by_key(|c| DetailsEvent::get_id(c.redo()));
+        changes
     }
 }
