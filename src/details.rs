@@ -287,6 +287,10 @@ where
         self.inner.iter()
     }
 
+    pub fn by_id(&self, id: &Id<T::IdentifiableType>) -> Option<&T> {
+        self.find(|x| &x.get_id() == id)
+    }
+
     pub fn find<P>(&self, mut predicate: P) -> Option<&T>
     where
         P: FnMut(&T) -> bool,
