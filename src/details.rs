@@ -302,7 +302,53 @@ where
         self.inner.len()
     }
 
-    /// Replaces all items in collection and returns diff-change
+    /// Replaces `criteria` matching items in a collection and returns diff-change
+    /// which represents removal, update and creation of items as
+    /// necessary
+    pub fn set_some<P>(&mut self, mut criteria: P, items: impl IntoIterator<Item = T>) -> C
+    where
+        T: Eq + fmt::Debug,
+        P: FnMut(&T) -> bool,
+    {
+        let mut changes = Vec::new();
+
+        let mut existing_ids: Vec<_> = self
+            .inner
+            .iter()
+            .filter(|x| criteria(*x))
+            .map(GetId::get_id)
+            .collect();
+
+        let mut new_ids = Vec::new();
+
+        for x in items {
+            if !criteria(&x) {
+                continue;
+            }
+
+            new_ids.push(x.get_id());
+            if let Some(pos) = self.position_by_id(&x.get_id()) {
+                if &x != &self.inner[pos] {
+                    changes.push(Updated(x));
+                }
+            } else {
+                changes.push(Created(x));
+            }
+        }
+
+        let missing_ids = {
+            existing_ids.retain(|x| !new_ids.contains(x));
+            existing_ids
+        };
+
+        for id in missing_ids {
+            changes.push(Deleted(id));
+        }
+
+        self.applied_many(changes)
+    }
+
+    /// Replaces all items in a collection and returns diff-change
     /// which represents removal, update and creation of items as
     /// necessary
     pub fn set_all(&mut self, items: impl IntoIterator<Item = T>) -> C
@@ -470,6 +516,7 @@ mod tests {
     const EXISTING_ID: usize = 0;
     const DELETED_ID: usize = 1;
     const NEW_ID: usize = 2;
+    const IGNORED_ID: usize = 3;
 
     fn colored_id(seed: usize) -> Id<TestEntry> {
         Id::new(raw_colored_id(seed))
@@ -552,7 +599,7 @@ mod tests {
 
     #[test]
     #[rustfmt::skip]
-    fn patch_changes_are_emitted() {
+    fn should_set_all_items() {
         let mut sut = setup_existing();
 
         let changes: Vec<_> = sut
@@ -562,6 +609,39 @@ mod tests {
                 colored(NEW_ID, Red),                 // to create
                 // colored(DELETED_ID, None),         // to delete
             ])
+            .into();
+
+        assert_eq!(
+            changes,
+            vec![
+                FullChange::new(
+                    Updated(colored(EXISTING_ID, Red)),
+                    Updated(colored(EXISTING_ID, None))
+                ),
+                FullChange::new(Created(colored(NEW_ID, Red)), Deleted(colored_id(NEW_ID))),
+                FullChange::new(
+                    Deleted(colored_id(DELETED_ID)),
+                    Created(colored(DELETED_ID, None))
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn should_set_some_items() {
+        let mut sut = setup_existing();
+        sut.add_new(colored(IGNORED_ID, None)).unwrap();
+
+        let changes: Vec<_> = sut
+            .set_some(
+                |x| x.child_id != raw_colored_id(IGNORED_ID),
+                vec![
+                    colored(ANY_NOT_USED_ENTRY_ID, None), // same
+                    colored(EXISTING_ID, Red),            // to update
+                    colored(NEW_ID, Red),                 // to create
+                    // colored(DELETED_ID, None),         // to delete
+                ])
             .into();
 
         assert_eq!(
