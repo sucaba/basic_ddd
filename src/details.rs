@@ -322,10 +322,6 @@ where
         let mut new_ids = Vec::new();
 
         for x in items {
-            if !criteria(&x) {
-                continue;
-            }
-
             new_ids.push(x.get_id());
             if let Some(pos) = self.position_by_id(&x.get_id()) {
                 if &x != &self.inner[pos] {
