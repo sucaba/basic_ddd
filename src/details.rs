@@ -21,16 +21,16 @@ where
 {
     Created(T),
     Updated(T),
-    Deleted(Id<<T as GetId>::IdentifiableType>),
+    Deleted(T::Id),
 }
 
 impl<T> DetailsEvent<T>
 where
-    Id<T::IdentifiableType>: Clone,
     T: GetId,
+    T::Id: Clone,
     T::IdentifiableType: Owned,
 {
-    pub fn get_id(&self) -> Option<Id<T::IdentifiableType>> {
+    pub fn get_id(&self) -> Option<T::Id> {
         match self {
             Created(x) => Some(x.get_id()),
             Updated(x) => Some(x.get_id()),
@@ -69,8 +69,7 @@ impl<T> fmt::Debug for DetailsEvent<T>
 where
     T: fmt::Debug + GetId,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: fmt::Debug,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: fmt::Debug,
+    T::Id: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -107,8 +106,7 @@ impl<T> Clone for DetailsEvent<T>
 where
     T: Clone + GetId,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: Clone,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
+    T::Id: Clone,
 {
     fn clone(&self) -> Self {
         match self {
@@ -150,8 +148,7 @@ impl<T, C> fmt::Debug for Details<T, C>
 where
     T: GetId + fmt::Debug,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: fmt::Debug,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: fmt::Debug,
+    T::Id: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(&self.inner, f)
@@ -189,8 +186,7 @@ impl<T, C> Default for Details<T, C>
 where
     T: GetId + Clone,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: hash::Hash + Clone,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
+    T::Id: hash::Hash + Clone,
     C: AppliedChange<DetailsEvent<T>>,
 {
     fn default() -> Self {
@@ -225,8 +221,7 @@ impl<T, C> Changable for Details<T, C>
 where
     T: GetId,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: hash::Hash + Clone,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
+    T::Id: hash::Hash + Clone,
 {
     fn apply(&mut self, event: Self::EventType) -> Self::EventType {
         match event {
@@ -263,7 +258,7 @@ where
         }
     }
 
-    fn position_by_id(&self, id: &Id<T::IdentifiableType>) -> Option<usize> {
+    fn position_by_id(&self, id: &T::Id) -> Option<usize> {
         self.inner.iter().position(|x| &x.get_id() == id)
     }
 
@@ -280,14 +275,13 @@ where
     C: AppliedChange<DetailsEvent<T>>,
     T: GetId,
     T::IdentifiableType: Owned,
-    Id<T::IdentifiableType>: hash::Hash + Clone,
-    Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
+    T::Id: hash::Hash + Clone,
 {
     pub fn iter(&self) -> slice::Iter<'_, T> {
         self.inner.iter()
     }
 
-    pub fn by_id(&self, id: &Id<T::IdentifiableType>) -> Option<&T> {
+    pub fn by_id(&self, id: &T::Id) -> Option<&T> {
         self.find(|x| &x.get_id() == id)
     }
 
@@ -426,7 +420,7 @@ where
         }
     }
 
-    pub fn remove(&mut self, item: &T) -> StdResult<C, NotFound<Id<T::IdentifiableType>>> {
+    pub fn remove(&mut self, item: &T) -> StdResult<C, NotFound<T::Id>> {
         let id = item.get_id();
         match self.remove_by_id(&id) {
             Err(_) => Err(NotFound(id)),
@@ -434,10 +428,7 @@ where
         }
     }
 
-    pub fn remove_by_id<'a>(
-        &mut self,
-        id: &'a Id<T::IdentifiableType>,
-    ) -> StdResult<C, NotFound<&'a Id<T::IdentifiableType>>> {
+    pub fn remove_by_id<'a>(&mut self, id: &'a T::Id) -> StdResult<C, NotFound<&'a T::Id>> {
         if let Some(_) = self.position_by_id(id) {
             Ok(self.applied(Deleted(id.clone())))
         } else {
@@ -660,8 +651,7 @@ mod tests {
     where
         T: GetId,
         T::IdentifiableType: Owned,
-        Id<T::IdentifiableType>: hash::Hash + Clone + Ord,
-        Id<<T::IdentifiableType as Owned>::OwnerType>: Clone,
+        T::Id: hash::Hash + Clone + Ord,
     {
         changes.sort_by_key(|c| DetailsEvent::get_id(c.redo()));
         changes

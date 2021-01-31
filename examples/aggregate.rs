@@ -59,8 +59,9 @@ enum OrderEvent {
     Item(
         Id<OrderMaster>,
         <Details<Rc<OrderItem>> as Historic>::EventType,
-    ),
+    )
 }
+
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 struct OrderMaster {

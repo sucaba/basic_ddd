@@ -16,13 +16,13 @@ where
 {
     Created(T),
     Updated(T),
-    Deleted(Id<T::IdentifiableType>),
+    Deleted(T::Id),
 }
 
 impl<T> fmt::Debug for MasterEvent<T>
 where
     T: fmt::Debug + GetId,
-    Id<T::IdentifiableType>: fmt::Debug,
+    T::Id: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -36,7 +36,7 @@ where
 impl<T> Clone for MasterEvent<T>
 where
     T: Clone + GetId,
-    Id<T::IdentifiableType>: Clone,
+    T::Id: Clone,
 {
     fn clone(&self) -> Self {
         match self {
@@ -52,7 +52,7 @@ impl<T> Eq for MasterEvent<T> where T: GetId + Eq {}
 impl<T> PartialEq for MasterEvent<T>
 where
     T: GetId + PartialEq,
-    Id<T::IdentifiableType>: PartialEq,
+    T::Id: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -124,7 +124,7 @@ where
         (result, changes)
     }
 
-    pub fn try_get_id(&self) -> Option<Id<T::IdentifiableType>> {
+    pub fn try_get_id(&self) -> Option<T::Id> {
         self.inner.as_ref().map(GetId::get_id)
     }
 

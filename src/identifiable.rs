@@ -5,6 +5,7 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 pub trait Identifiable: Sized {
+    // TODO: Rename to RawIdType
     type IdType: Eq;
 
     fn id(&self) -> Id<Self>;
@@ -12,8 +13,9 @@ pub trait Identifiable: Sized {
 
 pub trait GetId {
     type IdentifiableType: Identifiable;
+    type Id: Eq;
 
-    fn get_id(&self) -> Id<Self::IdentifiableType>;
+    fn get_id(&self) -> Self::Id;
 }
 
 impl<T> GetId for T
@@ -21,6 +23,7 @@ where
     T: Identifiable,
 {
     type IdentifiableType = T;
+    type Id = Id<T>;
 
     fn get_id(&self) -> Id<Self::IdentifiableType> {
         Identifiable::id(self)
@@ -32,8 +35,9 @@ where
     T: GetId,
 {
     type IdentifiableType = T::IdentifiableType;
+    type Id = T::Id;
 
-    fn get_id(&self) -> Id<Self::IdentifiableType> {
+    fn get_id(&self) -> Self::Id {
         GetId::get_id(std::ops::Deref::deref(self))
     }
 }
@@ -44,6 +48,7 @@ where
     Self: Clone,
 {
     type IdentifiableType = T;
+    type Id = Self;
 
     fn get_id(&self) -> Id<Self::IdentifiableType> {
         self.clone()

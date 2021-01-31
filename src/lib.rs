@@ -14,6 +14,7 @@ mod streaming_strategies;
 mod test_utils;
 mod undoable;
 pub mod joins;
+mod nested_details;
 
 pub use changable::*;
 pub use changes::*;
@@ -28,3 +29,4 @@ pub use streamable::*;
 pub use streaming::*;
 pub use streaming_strategies::*;
 pub use undoable::*;
+pub use nested_details::*;
