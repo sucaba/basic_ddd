@@ -1,10 +1,11 @@
 use crate::changable::Changable;
 use crate::identifiable::{Id, Identifiable};
 use crate::result::Result;
-use crate::streamable::{Streamable, Unstreamable};
+use crate::streamable::{Streamable, SupportsDeletion, Unstreamable};
 use crate::streaming::StreamAdapter;
 use std::error::Error as StdError;
 use std::fmt;
+use std::hash::Hash;
 use std::result::Result as StdResult;
 
 pub trait Load<T>
@@ -12,6 +13,8 @@ where
     T: Identifiable,
 {
     fn load(&mut self, id: &Id<T>) -> Result<T>;
+
+    fn load_all(&mut self) -> Result<Vec<T>>;
 }
 
 pub trait Save<T> {
@@ -113,12 +116,18 @@ where
 impl<T, TEvent> Load<T> for InMemoryStorage<T, TEvent>
 where
     T: Unstreamable<EventType = TEvent> + Identifiable,
-    TEvent: Clone,
-    Id<T>: Clone,
+    TEvent: Clone + SupportsDeletion,
+    Id<T>: Hash + Clone,
 {
     fn load(&mut self, id: &Id<T>) -> Result<T> {
         let events = self.select_events(id);
         T::load(events)
+    }
+
+    fn load_all(&mut self) -> Result<Vec<T>> {
+        let all_events = self.events.iter().map(|x| (x.id.clone(), x.event.clone()));
+
+        T::load_many(all_events)
     }
 }
 
