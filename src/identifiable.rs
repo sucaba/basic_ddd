@@ -1,5 +1,6 @@
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 
+use crate::contextual::Contextual;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -47,6 +48,17 @@ where
 
     fn get_id(&self) -> Id<Self::IdentifiableType> {
         self.clone()
+    }
+}
+
+impl<T, C> GetId for Contextual<T, C>
+where
+    T: GetId,
+{
+    type IdentifiableType = T::IdentifiableType;
+
+    fn get_id(&self) -> Id<Self::IdentifiableType> {
+        self.subject.get_id()
     }
 }
 
