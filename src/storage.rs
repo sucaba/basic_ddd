@@ -1,5 +1,5 @@
 use crate::changable::Changable;
-use crate::identifiable::{Id, Identifiable};
+use crate::identifiable::{GetId, Id};
 use crate::result::Result;
 use crate::streamable::{Streamable, SupportsDeletion, Unstreamable};
 use crate::streaming::StreamAdapter;
@@ -8,21 +8,21 @@ use std::fmt;
 use std::hash::Hash;
 use std::result::Result as StdResult;
 
-struct EventEnvelope<T: Identifiable, TEvent> {
-    pub id: Id<T>,
+struct EventEnvelope<T: GetId, TEvent> {
+    pub id: Id<T::IdentifiableType>,
     pub event: TEvent,
 }
 
-impl<T: Identifiable, TEvent> EventEnvelope<T, TEvent> {
-    fn new(id: Id<T>, event: TEvent) -> Self {
+impl<T: GetId, TEvent> EventEnvelope<T, TEvent> {
+    fn new(id: Id<T::IdentifiableType>, event: TEvent) -> Self {
         Self { id, event }
     }
 }
 
 impl<T, TEvent> Clone for EventEnvelope<T, TEvent>
 where
-    T: Identifiable,
-    Id<T>: Clone,
+    T: GetId,
+    Id<T::IdentifiableType>: Clone,
     TEvent: Clone,
 {
     fn clone(&self) -> Self {
@@ -35,8 +35,8 @@ where
 
 impl<T, TEvent> fmt::Debug for EventEnvelope<T, TEvent>
 where
-    T: Identifiable,
-    Id<T>: fmt::Debug,
+    T: GetId,
+    Id<T::IdentifiableType>: fmt::Debug,
     TEvent: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -49,21 +49,24 @@ where
 
 pub struct InMemoryStorage<T, TEvent>
 where
-    T: Identifiable,
+    T: GetId,
 {
     events: Vec<EventEnvelope<T, TEvent>>,
 }
 
 impl<T, TEvent> InMemoryStorage<T, TEvent>
 where
-    T: Changable<EventType = TEvent> + Identifiable,
-    Id<T>: Clone,
+    T: Changable<EventType = TEvent> + GetId,
+    Id<T::IdentifiableType>: Clone,
 {
     pub fn new() -> Self {
         Self { events: Vec::new() }
     }
 
-    fn select_events<'a>(&'a self, id: &'a Id<T>) -> impl 'a + Iterator<Item = TEvent>
+    fn select_events<'a>(
+        &'a self,
+        id: &'a Id<T::IdentifiableType>,
+    ) -> impl 'a + Iterator<Item = TEvent>
     where
         TEvent: Clone,
     {
@@ -86,7 +89,7 @@ where
             .cloned()
     }
 
-    pub fn load(&mut self, id: &Id<T>) -> Result<T>
+    pub fn load(&mut self, id: &Id<T::IdentifiableType>) -> Result<T>
     where
         T: Unstreamable<EventType = TEvent>,
         TEvent: Clone,
@@ -99,7 +102,7 @@ where
     where
         T: Unstreamable<EventType = TEvent>,
         TEvent: Clone + SupportsDeletion,
-        Id<T>: Hash,
+        Id<T::IdentifiableType>: Hash,
     {
         let all_events = self.events.iter().map(|x| (x.id.clone(), x.event.clone()));
 
@@ -110,7 +113,7 @@ where
     where
         T: Streamable<EventType = TEvent>,
     {
-        let id = root.id();
+        let id = root.get_id();
         let to_envelope = |e| EventEnvelope::new(id.clone(), e);
         let mut adapter = StreamAdapter::new(&mut self.events, to_envelope);
         root.stream_to(&mut adapter)
@@ -119,9 +122,9 @@ where
 
 impl<T, TEvent> fmt::Debug for InMemoryStorage<T, TEvent>
 where
-    T: Identifiable,
+    T: GetId,
     TEvent: fmt::Debug,
-    Id<T>: fmt::Debug,
+    Id<T::IdentifiableType>: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("InMemoryStorage")
