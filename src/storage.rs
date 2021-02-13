@@ -8,19 +8,6 @@ use std::fmt;
 use std::hash::Hash;
 use std::result::Result as StdResult;
 
-pub trait Load<T>
-where
-    T: Identifiable,
-{
-    fn load(&mut self, id: &Id<T>) -> Result<T>;
-
-    fn load_all(&mut self) -> Result<Vec<T>>;
-}
-
-pub trait Save<T> {
-    fn save(&mut self, root: T) -> StdResult<(), Box<dyn StdError>>;
-}
-
 struct EventEnvelope<T: Identifiable, TEvent> {
     pub id: Id<T>,
     pub event: TEvent,
@@ -98,6 +85,36 @@ where
             .map(|x| &x.event)
             .cloned()
     }
+
+    pub fn load(&mut self, id: &Id<T>) -> Result<T>
+    where
+        T: Unstreamable<EventType = TEvent>,
+        TEvent: Clone,
+    {
+        let events = self.select_events(id);
+        T::load(events)
+    }
+
+    pub fn load_all(&mut self) -> Result<Vec<T>>
+    where
+        T: Unstreamable<EventType = TEvent>,
+        TEvent: Clone + SupportsDeletion,
+        Id<T>: Hash,
+    {
+        let all_events = self.events.iter().map(|x| (x.id.clone(), x.event.clone()));
+
+        T::load_many(all_events)
+    }
+
+    pub fn save(&mut self, mut root: T) -> StdResult<(), Box<dyn StdError>>
+    where
+        T: Streamable<EventType = TEvent>,
+    {
+        let id = root.id();
+        let to_envelope = |e| EventEnvelope::new(id.clone(), e);
+        let mut adapter = StreamAdapter::new(&mut self.events, to_envelope);
+        root.stream_to(&mut adapter)
+    }
 }
 
 impl<T, TEvent> fmt::Debug for InMemoryStorage<T, TEvent>
@@ -110,36 +127,5 @@ where
         f.debug_struct("InMemoryStorage")
             .field("events", &self.events)
             .finish()
-    }
-}
-
-impl<T, TEvent> Load<T> for InMemoryStorage<T, TEvent>
-where
-    T: Unstreamable<EventType = TEvent> + Identifiable,
-    TEvent: Clone + SupportsDeletion,
-    Id<T>: Hash + Clone,
-{
-    fn load(&mut self, id: &Id<T>) -> Result<T> {
-        let events = self.select_events(id);
-        T::load(events)
-    }
-
-    fn load_all(&mut self) -> Result<Vec<T>> {
-        let all_events = self.events.iter().map(|x| (x.id.clone(), x.event.clone()));
-
-        T::load_many(all_events)
-    }
-}
-
-impl<T, TEvent> Save<T> for InMemoryStorage<T, TEvent>
-where
-    T: Streamable<EventType = TEvent> + Identifiable,
-    Id<T>: Clone,
-{
-    fn save(&mut self, mut root: T) -> StdResult<(), Box<dyn StdError>> {
-        let id = root.id();
-        let to_envelope = |e| EventEnvelope::new(id.clone(), e);
-        let mut adapter = StreamAdapter::new(&mut self.events, to_envelope);
-        root.stream_to(&mut adapter)
     }
 }

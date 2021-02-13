@@ -6,8 +6,8 @@ use std::result::Result as StdResult;
 
 use basic_ddd::{
     Changable, CloneRedoStreamingStrategy, Details, Error, FullChange, FullChanges, Historic, Id,
-    Identifiable, InMemoryStorage, Load, Master, MasterEvent, Owned, Record, Result, Save, Stream,
-    Streamable, SupportsDeletion, Undoable,
+    Identifiable, InMemoryStorage, Master, MasterEvent, Owned, Record, Result, Stream, Streamable,
+    SupportsDeletion, Undoable,
 };
 
 fn main() -> StdResult<(), Box<dyn StdError>> {
