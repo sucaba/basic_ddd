@@ -1,7 +1,7 @@
 use crate::changable::Changable;
 use crate::identifiable::{GetId, Id};
 use crate::result::Result;
-use crate::streamable::{Streamable, SupportsDeletion, Unstreamable};
+use crate::streamable::{Streamable, StreamableInContext, SupportsDeletion, Unstreamable};
 use crate::streaming::StreamAdapter;
 use std::error::Error as StdError;
 use std::fmt;
@@ -117,6 +117,20 @@ where
         let to_envelope = |e| EventEnvelope::new(id.clone(), e);
         let mut adapter = StreamAdapter::new(&mut self.events, to_envelope);
         root.stream_to(&mut adapter)
+    }
+
+    pub fn save_in_context<TCtx>(
+        &mut self,
+        ctx: &mut TCtx,
+        root: &mut T,
+    ) -> StdResult<(), Box<dyn StdError>>
+    where
+        T: StreamableInContext<TCtx>,
+    {
+        let id = root.get_id();
+        let to_envelope = |e| EventEnvelope::new(id.clone(), e);
+        let mut adapter = StreamAdapter::new(&mut self.events, to_envelope);
+        root.stream_in_context_to(ctx, &mut adapter)
     }
 }
 
