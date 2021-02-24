@@ -227,7 +227,7 @@ mod tests {
     }
 
     impl Streamable for TestEntry {
-        fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn StdError>>
+        fn stream_to<S>(&mut self, stream: &mut S) -> Result<usize, Box<dyn StdError>>
         where
             S: Stream<Self::EventType>,
         {

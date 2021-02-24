@@ -1,6 +1,6 @@
 use std::error::Error;
 pub trait Stream<TEvent>: Sized {
-    fn stream<I>(&mut self, events: I) -> Result<(), Box<dyn Error>>
+    fn stream<I>(&mut self, events: I) -> Result<usize, Box<dyn Error>>
     where
         I: IntoIterator<Item = TEvent>;
 }
@@ -9,7 +9,7 @@ impl<S, TEvent> Stream<TEvent> for &mut S
 where
     S: Stream<TEvent>,
 {
-    fn stream<I>(&mut self, events: I) -> Result<(), Box<dyn Error>>
+    fn stream<I>(&mut self, events: I) -> Result<usize, Box<dyn Error>>
     where
         I: IntoIterator<Item = TEvent>,
     {
@@ -18,12 +18,14 @@ where
 }
 
 impl<TEvent> Stream<TEvent> for Vec<TEvent> {
-    fn stream<I>(&mut self, events: I) -> Result<(), Box<dyn Error>>
+    fn stream<I>(&mut self, events: I) -> Result<usize, Box<dyn Error>>
     where
         I: IntoIterator<Item = TEvent>,
     {
+        let len_before = self.len();
         self.extend(events);
-        Ok(())
+        let result = self.len() - len_before;
+        Ok(result)
     }
 }
 
@@ -40,7 +42,7 @@ where
     TInner: Stream<TInnerEvent>,
     F: Fn(TEvent) -> TInnerEvent,
 {
-    fn stream<I>(&mut self, events: I) -> Result<(), Box<dyn Error>>
+    fn stream<I>(&mut self, events: I) -> Result<usize, Box<dyn Error>>
     where
         I: IntoIterator<Item = TEvent>,
     {

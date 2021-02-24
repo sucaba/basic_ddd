@@ -6,7 +6,7 @@ use std::hash::Hash;
 use std::{collections::HashMap, error::Error};
 
 pub trait Streamable: Historic {
-    fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn Error>>
+    fn stream_to<S>(&mut self, stream: &mut S) -> Result<usize, Box<dyn Error>>
     where
         S: Stream<Self::EventType>;
 
@@ -22,28 +22,18 @@ pub trait SupportsDeletion {
     fn is_deletion(&self) -> bool;
 }
 
-/*
-impl<'a, T: Streamable> Streamable for &'a T {
-    fn stream_to<S>(self, stream: &mut S) -> Result<(), Box<dyn Error>>
-    where
-        S: Stream<Self::EventType> {
-        self.as_mut().stream_to(stream)
-    }
-}
-*/
-
 pub trait StreamableInContext<TCtx>: Historic {
     fn stream_in_context_to<S>(
         &mut self,
         context: &mut TCtx,
         stream: &mut S,
-    ) -> Result<(), Box<dyn Error>>
+    ) -> Result<usize, Box<dyn Error>>
     where
         S: Stream<Self::EventType>;
 
     fn take_changes_in_context(&mut self, context: &mut TCtx) -> Vec<Self::EventType> {
         let mut result = Vec::new();
-        self.stream_in_context_to(context, &mut result).unwrap();
+        let _count = self.stream_in_context_to(context, &mut result).unwrap();
         result
     }
 }
@@ -62,7 +52,7 @@ impl<T, TCtx> Streamable for Contextual<T, TCtx>
 where
     T: StreamableInContext<TCtx>,
 {
-    fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn Error>>
+    fn stream_to<S>(&mut self, stream: &mut S) -> Result<usize, Box<dyn Error>>
     where
         S: Stream<Self::EventType>,
     {
@@ -138,9 +128,10 @@ mod tests {
 
         let mut sut = entity_to_stream.in_context(context);
         let mut stream = Vec::new();
-        let _ = sut.stream_to(&mut stream);
+        let count = sut.stream_to(&mut stream).unwrap();
 
         assert_eq!(stream, vec![Captured(MyContext { name: "exotic" })]);
+        assert_eq!(1, count);
     }
 
     #[test]
@@ -234,7 +225,7 @@ mod tests {
             &mut self,
             context: &mut MyContext,
             stream: &mut S,
-        ) -> Result<(), Box<dyn Error>>
+        ) -> Result<usize, Box<dyn Error>>
         where
             S: Stream<Self::EventType>,
         {

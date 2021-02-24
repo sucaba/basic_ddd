@@ -58,7 +58,7 @@ impl<'a, U: Undoable> Streamable for UndoRedoStreamingStrategy<'a, U>
 where
     U::EventType: Clone,
 {
-    fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn Error>>
+    fn stream_to<S>(&mut self, stream: &mut S) -> Result<usize, Box<dyn Error>>
     where
         S: Stream<U::EventType>,
     {
@@ -92,7 +92,7 @@ impl<'a, U: Undoable> Streamable for CloneRedoStreamingStrategy<'a, U>
 where
     U::EventType: Clone,
 {
-    fn stream_to<S>(&mut self, stream: &mut S) -> Result<(), Box<dyn Error>>
+    fn stream_to<S>(&mut self, stream: &mut S) -> Result<usize, Box<dyn Error>>
     where
         S: Stream<U::EventType>,
     {

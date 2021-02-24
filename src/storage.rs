@@ -109,7 +109,7 @@ where
         T::load_many(all_events)
     }
 
-    pub fn save(&mut self, mut root: T) -> StdResult<(), Box<dyn StdError>>
+    pub fn save(&mut self, mut root: T) -> StdResult<usize, Box<dyn StdError>>
     where
         T: Streamable<EventType = TEvent>,
     {
@@ -123,7 +123,7 @@ where
         &mut self,
         ctx: &mut TCtx,
         root: &mut T,
-    ) -> StdResult<(), Box<dyn StdError>>
+    ) -> StdResult<usize, Box<dyn StdError>>
     where
         T: StreamableInContext<TCtx>,
     {
