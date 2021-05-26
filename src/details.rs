@@ -656,6 +656,25 @@ mod tests {
         );
     }
 
+    #[test]
+    #[rustfmt::skip]
+    fn should_ignore_not_changed_items_when_seting_some() {
+        let mut sut = setup_existing();
+        sut.add_new(colored(IGNORED_ID, None)).unwrap();
+
+        let changes: Vec<_> = sut
+            .set_some(
+                |x| x.child_id != raw_colored_id(IGNORED_ID),
+                vec![
+                    colored(ANY_NOT_USED_ENTRY_ID, None),
+                    colored(EXISTING_ID, None),
+                    colored(DELETED_ID, None),
+                ])
+            .into();
+
+        assert_eq!(changes, vec![]);
+    }
+
     fn sorted<T>(mut changes: Vec<FullChange<DetailsEvent<T>>>) -> Vec<FullChange<DetailsEvent<T>>>
     where
         T: GetId,
