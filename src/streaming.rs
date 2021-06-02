@@ -50,16 +50,16 @@ where
     }
 }
 
-pub fn pipe_streams<S1, S2>(s1: S1, s2: S2) -> StreamsPipe<S1, S2> {
-    StreamsPipe { s1, s2 }
+pub fn pipe_streams<'a, S1, S2>(s1: &'a mut S1, s2: &'a mut S2) -> StreamPipe<'a, S1, S2> {
+    StreamPipe { s1, s2 }
 }
 
-pub struct StreamsPipe<S1, S2> {
-    s1: S1,
-    s2: S2,
+pub struct StreamPipe<'a, S1, S2> {
+    s1: &'a mut S1,
+    s2: &'a mut S2,
 }
 
-impl<TEvent, S1, S2> Stream<TEvent> for StreamsPipe<S1, S2>
+impl<'a, TEvent, S1, S2> Stream<TEvent> for StreamPipe<'a, S1, S2>
 where
     TEvent: Clone,
     S1: Stream<TEvent>,
