@@ -50,28 +50,26 @@ where
     }
 }
 
-pub fn pipe_streams<'a, S1, S2>(s1: &'a mut S1, s2: &'a mut S2) -> StreamPipe<'a, S1, S2> {
-    StreamPipe { s1, s2 }
+pub fn pipe_streams<'a, P, Dst>(pipe: P, dest: &'a mut Dst) -> StreamPipe<'a, P, Dst> {
+    StreamPipe { pipe, dest }
 }
 
-pub struct StreamPipe<'a, S1, S2> {
-    s1: &'a mut S1,
-    s2: &'a mut S2,
+pub struct StreamPipe<'a, P, Dest> {
+    pipe: P,
+    dest: &'a mut Dest,
 }
 
-impl<'a, TEvent, S1, S2> Stream<TEvent> for StreamPipe<'a, S1, S2>
+impl<'a, TEvent, P, Dst> Stream<TEvent> for StreamPipe<'a, P, Dst>
 where
     TEvent: Clone,
-    S1: Stream<TEvent>,
-    S2: Stream<TEvent>,
+    P: FnMut(TEvent) -> Option<TEvent>,
+    Dst: Stream<TEvent>,
 {
     fn stream<I>(&mut self, events: I) -> Result<usize, Box<dyn Error>>
     where
         I: IntoIterator<Item = TEvent>,
     {
-        // TODO: Make it more memory efficient
-        let all: Vec<TEvent> = events.into_iter().collect();
-        self.s1.stream(all.clone())?;
-        self.s2.stream(all)
+        self.dest
+            .stream(events.into_iter().filter_map(&mut self.pipe))
     }
 }
