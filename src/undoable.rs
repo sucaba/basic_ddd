@@ -170,6 +170,7 @@ mod tests {
     enum TestEvent {
         Stopped,
         Started,
+        #[allow(dead_code)]
         Paused,
     }
 

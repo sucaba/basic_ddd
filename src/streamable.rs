@@ -18,8 +18,15 @@ pub trait Streamable: Historic {
     }
 }
 
-pub trait SupportsDeletion {
-    fn is_deletion(&self) -> bool;
+#[non_exhaustive]
+pub enum EventKind {
+    Creation,
+    Deletion,
+    Other,
+}
+
+pub trait KindOfEvent {
+    fn kind_of_event(&self) -> EventKind;
 }
 
 pub trait StreamableInContext<TCtx>: Historic {
@@ -67,7 +74,7 @@ pub trait Unstreamable: Changable + Default + Sized {
 
     fn load_many<I, ID>(events: I) -> crate::result::Result<Vec<Self>>
     where
-        Self::EventType: SupportsDeletion,
+        Self::EventType: KindOfEvent,
         I: IntoIterator<Item = (ID, Self::EventType)>,
         ID: Hash + Eq;
 }
@@ -90,21 +97,36 @@ where
 
     fn load_many<I, ID>(events: I) -> crate::result::Result<Vec<Self>>
     where
-        Self::EventType: SupportsDeletion,
+        Self::EventType: KindOfEvent,
         I: IntoIterator<Item = (ID, Self::EventType)>,
         ID: Hash + Eq,
     {
         let mut map = HashMap::<ID, Self>::new();
         for (id, e) in events {
-            if e.is_deletion() {
-                let _ = map.remove_entry(&id);
-            } else {
-                let aggregate = map.entry(id).or_default();
-                let _non_undoable_change = aggregate.apply(e);
+            match e.kind_of_event() {
+                EventKind::Creation => {
+                    let aggregate = map
+                        .entry(id)
+                        .and_modify(|e| {
+                            std::mem::take(e);
+                        })
+                        .or_default();
+                    let _non_undoable_change = aggregate.apply(e);
+                }
+                EventKind::Deletion => {
+                    let _ = map.remove_entry(&id);
+                }
+                EventKind::Other => {
+                    if let std::collections::hash_map::Entry::Occupied(mut occupied) = map.entry(id)
+                    {
+                        let aggregate = occupied.get_mut();
+                        let _non_undoable_change = aggregate.apply(e);
+                    }
+                }
             }
         }
 
-        Ok(map.into_iter().map(|p| p.1).collect())
+        Ok(map.into_iter().map(|(_key, aggregate)| aggregate).collect())
     }
 }
 
@@ -176,9 +198,12 @@ mod tests {
         }
     }
 
-    impl SupportsDeletion for MyUnstreamableEvent {
-        fn is_deletion(&self) -> bool {
-            matches!(self, MyUnstreamableEvent::Deleted(_))
+    impl KindOfEvent for MyUnstreamableEvent {
+        fn kind_of_event(&self) -> EventKind {
+            match self {
+                MyUnstreamableEvent::Created(_, _) => EventKind::Creation,
+                MyUnstreamableEvent::Deleted(_) => EventKind::Deletion,
+            }
         }
     }
 

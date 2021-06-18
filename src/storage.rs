@@ -1,7 +1,7 @@
 use crate::changable::Changable;
 use crate::identifiable::{GetId, Id};
 use crate::result::Result;
-use crate::streamable::{Streamable, StreamableInContext, SupportsDeletion, Unstreamable};
+use crate::streamable::{KindOfEvent, Streamable, StreamableInContext, Unstreamable};
 use crate::streaming::StreamAdapter;
 use std::error::Error as StdError;
 use std::fmt;
@@ -101,7 +101,7 @@ where
     pub fn load_all(&mut self) -> Result<Vec<T>>
     where
         T: Unstreamable<EventType = TEvent>,
-        TEvent: Clone + SupportsDeletion,
+        TEvent: Clone + KindOfEvent,
         Id<T::IdentifiableType>: Hash,
     {
         let all_events = self.events.iter().map(|x| (x.id.clone(), x.event.clone()));

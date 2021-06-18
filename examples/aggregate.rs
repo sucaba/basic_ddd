@@ -5,9 +5,9 @@ use std::rc::Rc;
 use std::result::Result as StdResult;
 
 use basic_ddd::{
-    Changable, CloneRedoStreamingStrategy, Details, Error, FullChange, FullChanges, Historic, Id,
-    Identifiable, InMemoryStorage, Master, MasterEvent, Owned, Record, Result, Stream, Streamable,
-    SupportsDeletion, Undoable,
+    Changable, CloneRedoStreamingStrategy, Details, Error, EventKind, FullChange, FullChanges,
+    Historic, Id, Identifiable, InMemoryStorage, KindOfEvent, Master, MasterEvent, Owned, Record,
+    Result, Stream, Streamable, Undoable,
 };
 
 fn main() -> StdResult<(), Box<dyn StdError>> {
@@ -62,9 +62,13 @@ enum OrderEvent {
     ),
 }
 
-impl SupportsDeletion for OrderEvent {
-    fn is_deletion(&self) -> bool {
-        matches!(self, OrderEvent::Primary(MasterEvent::Deleted(_)))
+impl KindOfEvent for OrderEvent {
+    fn kind_of_event(&self) -> EventKind {
+        match self {
+            OrderEvent::Primary(MasterEvent::Created(_)) => EventKind::Creation,
+            OrderEvent::Primary(MasterEvent::Deleted(_)) => EventKind::Deletion,
+            _ => EventKind::Other,
+        }
     }
 }
 
